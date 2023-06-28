@@ -20,6 +20,19 @@ import matplotlib.pyplot as plt
 PASCAL_ROOT = "datasets/pascal/data/VOCdevkit/VOC2012/"
 COCO_ROOT = "datasets/coco/data/"
 
+def imshow(images, labels):
+    if images.shape[0] > 1:
+        for i, (img, lab) in enumerate( zip(images, labels) ):
+            img = img.moveaxis(0, -1).numpy()
+            lab = lab.squeeze().numpy()
+            plt.imshow(img); plt.savefig('img_{}.png'.format(i)); plt.close();
+            plt.imshow(lab); plt.savefig('lab_{}.png'.format(i)); plt.close();
+    else:
+        img = img.moveaxis(0, -1).numpy()
+        lab = lab.squeeze().numpy()
+        plt.imshow(img); plt.savefig('img_{}.png'.format(i)); plt.close();
+        plt.imshow(lab); plt.savefig('lab_{}.png'.format(i)); plt.close();
+
 
 def transforms(dataset, image: torch.Tensor, labels: torch.Tensor):
         """ Applies transformations to the image during inference and training. 

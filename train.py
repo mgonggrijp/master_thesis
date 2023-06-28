@@ -350,26 +350,9 @@ if args.mode == 'segmenter':
 
     scheduler = torch.optim.lr_scheduler.PolynomialLR(
         optimizer, total_iters=iters, power=0.9, last_epoch=-1, verbose=False)
-        
     
     print("".join([arg + ' : ' + str(args.__dict__[arg]) + "\n" for arg in args.__dict__]))
     
-    # def imshow(images, labels):
-    
-    #     for i, (img, lab) in enumerate( zip(images, labels) ):
-    #         img = img.moveaxis(0, -1).numpy()
-    #         lab = lab.squeeze().numpy()
-    #         plt.imshow(img);
-    #         plt.savefig('img_{}.png'.format(i));
-    #         plt.close();
-
-    #         plt.imshow(lab);
-    #         plt.savefig('lab_{}.png'.format(i));
-    #         plt.close();
-
-    # for images, labels, _ in train_loader:
-    #     imshow(images, labels)
-
 
 # endregion model and data init
     

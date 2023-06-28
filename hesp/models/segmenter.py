@@ -171,6 +171,7 @@ class Segmenter(AbstractModel):
                 # compute the conditional probabilities from the images
                 self.data_forward()
                 
+                
                 self.steps += 1
                 
                 # update the model using the conditional probabilities and the labels
