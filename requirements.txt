@@ -1,0 +1,9 @@
+numpy
+networkx
+matplotlib
+Pillow
+opencv-python
+torchvision
+torch
+matplotlib
+torchmetrics

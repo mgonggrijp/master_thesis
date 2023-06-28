@@ -1,0 +1,5 @@
+setup.py
+Poincare_hesp.egg-info/PKG-INFO
+Poincare_hesp.egg-info/SOURCES.txt
+Poincare_hesp.egg-info/dependency_links.txt
+Poincare_hesp.egg-info/top_level.txt

@@ -1,0 +1,61 @@
+/home/mats/master_thesis/datasets/pascal/data/VOCtrainval_11-May-2012/VOCdevkit/VOC2012/ /home/mats/master_thesis/master_thesis/datasets/coco/data
+-------------------------THIS ONE-------------------------
+mode : segmenter
+train_metrics : True
+val_metrics : True
+base_model : deeplabv3plus
+resume : False
+dataset : pascal
+geometry : hyperbolic
+dim : 2
+c : 1.0
+seed : 0.0
+flat : True
+freeze_bb : False
+freeze_bn : False
+batch_size : 2
+num_epochs : 1
+device : cuda
+slr : 0.01
+backbone : resnet101
+output_stride : 16
+gpu : 0
+base_save_dir : saves
+segmenter_dir : segmenter_experiments
+zero_label : False
+test_zero_label : False
+train : True
+val : True
+id : 
+json_name : 
+pre_trained_bb : True
+
+train size 45 val size 5
+random seed 0.0
+training..
+     [epoch] 0
+[loss] 1.093698649243875 
+
+     [train metrics] 
+
+[accuracy per class] [0.5321682095527649, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.00026318986783735454, 0.0, 0.0, 0.0, 0.0, 0.4544762670993805, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] 
+
+[miou per class] [0.4570513665676117, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 5.04860254295636e-05, 0.0, 0.0, 0.0, 0.0, 0.02360980585217476, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] 
+
+[mean accuracy] 0.046995602548122406 
+
+[mean miou] 0.022891031578183174 
+
+
+     [validation metrics] 
+
+[accuracy per class] [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] 
+
+[miou per class] [0.5564799904823303, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] 
+
+[mean accuracy] 0.04762 
+
+[mean miou] 0.0265 
+
+
+--------------------------------
