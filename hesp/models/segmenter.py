@@ -105,9 +105,9 @@ class Segmenter(AbstractModel):
         
         if self.computing_metrics or self.train_metrics:
             joints = self.embedding_space.get_joints(self.cprobs)
-            self.preds = self.embedding_space.decide(joints)
-            self.iou_fn.forward(self.preds, self.labels)
-            self.acc_fn.forward(self.preds, self.labels)
+            preds = self.embedding_space.decide(joints)
+            self.iou_fn.forward(preds, self.labels)
+            self.acc_fn.forward(preds, self.labels)
             
         
     def update_model(self):
@@ -119,9 +119,12 @@ class Segmenter(AbstractModel):
                     self.labels[valid_mask],
                     self.tree)
         
+        if self.steps % 5 == 0:
+            print(hce_loss.item())            
+        
         self.running_loss += hce_loss.item()
         
-        print(self.running_loss / self.steps)
+        # print(self.running_loss / self.steps)
             
         self.clip_norms()
         

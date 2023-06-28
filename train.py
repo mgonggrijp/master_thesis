@@ -33,6 +33,13 @@ parser.add_argument(
     help='Wether or not to record the metrics for the training data during training.'
 )
 
+parser.add_argument(
+    '--data_limit',
+    default=-1,
+    type=int,
+    help='Maxmimum number of samples that can be used. For memory preservation.'
+)
+
 
 parser.add_argument(
     '--val_metrics',
@@ -294,7 +301,7 @@ if args.mode == 'segmenter':
     means = torch.load("datasets/" + args.dataset + "/means.pt")
     
     train_files, val_files = data_helpers.make_data_splits(
-        args.dataset, limit=50, split=(0.9, 0.1), shuffle=False)
+        args.dataset, limit=args.data_limit, split=(0.9, 0.1), shuffle=False)
     
     train_loader = data_helpers.make_torch_loader(
         args.dataset, train_files, config, mode='val')
