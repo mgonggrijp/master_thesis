@@ -319,6 +319,8 @@ if args.mode == 'segmenter':
     optimizers = []
     schedulers = []
 
+    "HEY TESTING HEY HEY IM GAY HAHA"
+
         
     optimizer = geoopt.optim.rsgd.RiemannianSGD(
         [model.embedding_space.offsets, model.embedding_space.normals] + \
