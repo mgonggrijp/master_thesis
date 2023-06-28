@@ -154,7 +154,7 @@ cython_debug/
 
 data/
 
-DeepLabV3Plus_Pytorch_master/
+DeepLabV3Plus-Pytorch/
 
 deeplab.py
 
