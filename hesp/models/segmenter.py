@@ -105,17 +105,17 @@ class Segmenter(AbstractModel):
 
         self.cprobs = self.embedding_space.softmax(logits)
         
-        if self.steps % 10 == 0:
-            print("proj norms", proj_embs.norm(dim=1).mean().item())
-            print("offsets norms", self.embedding_space.offsets.norm(dim=1).mean().item())
-            print("normals norms", self.embedding_space.normals.norm(dim=1).mean().item())
-            print("----------------------------------------\n\n")
+        # if self.steps % 10 == 0:
+        #     print("proj norms", proj_embs.norm(dim=1).mean().item())
+        #     print("offsets norms", self.embedding_space.offsets.norm(dim=1).mean().item())
+        #     print("normals norms", self.embedding_space.normals.norm(dim=1).mean().item())
+        #     print("----------------------------------------\n\n")
             
             # print(self.)
         
-        if self.steps % 50 == 0:
-            import pdb
-            pdb.set_trace()
+        # if self.steps % 50 == 0:
+            # import pdb
+            # pdb.set_trace()
         
         if self.computing_metrics or self.train_metrics:
             joints = self.embedding_space.get_joints(self.cprobs)

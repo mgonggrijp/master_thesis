@@ -9,7 +9,6 @@ from hesp.util.loss import *
 import matplotlib.pyplot as plt
 
 
-torch.set_default_dtype(torch.float64)
 
 
 # region argparse
@@ -225,7 +224,19 @@ parser.add_argument(
     help="If you want to use the latest pretrained backbone weights"
 )
 
+parser.add_argument(
+    "--precision",
+    default=32,
+    type=str,
+)
+
 args = parser.parse_args()
+
+if args.precision == '32':
+    torch.set_default_dtype(torch.float32)
+    
+if args.precision == '64':   
+    torch.set_default_dtype(torch.float64)   
 
 config = Config(
     dataset=args.dataset,
@@ -303,7 +314,7 @@ if args.mode == 'segmenter':
         args.dataset, limit=args.data_limit, split=(0.9, 0.1), shuffle=False)
     
     train_loader = data_helpers.make_torch_loader(
-        args.dataset, train_files, config, mode='val')
+        args.dataset, train_files, config, mode='train')
     
     val_loader = data_helpers.make_torch_loader(
         args.dataset, val_files, config, mode='val')
@@ -336,13 +347,29 @@ if args.mode == 'segmenter':
         momentum=config.segmenter._MOMENTUM,
         weight_decay=config.segmenter._WEIGHT_DECAY,
         stabilize=None)
-    
 
     scheduler = torch.optim.lr_scheduler.PolynomialLR(
         optimizer, total_iters=iters, power=0.9, last_epoch=-1, verbose=False)
         
     
     print("".join([arg + ' : ' + str(args.__dict__[arg]) + "\n" for arg in args.__dict__]))
+    
+    # def imshow(images, labels):
+    
+    #     for i, (img, lab) in enumerate( zip(images, labels) ):
+    #         img = img.moveaxis(0, -1).numpy()
+    #         lab = lab.squeeze().numpy()
+    #         plt.imshow(img);
+    #         plt.savefig('img_{}.png'.format(i));
+    #         plt.close();
+
+    #         plt.imshow(lab);
+    #         plt.savefig('lab_{}.png'.format(i));
+    #         plt.close();
+
+    # for images, labels, _ in train_loader:
+    #     imshow(images, labels)
+
 
 # endregion model and data init
     
