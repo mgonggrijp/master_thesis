@@ -4,7 +4,7 @@ from hesp.embedding_space.embedding_space import EmbeddingSpace
 from hesp.hierarchy.tree import Tree
 from hesp.models.abstract_model import AbstractModel
 from hesp.util import loss
-from hesp.models.embedding_functions.DeepLabV3Plus_Pytorch_master import network
+from hesp.models.DeepLabV3Plus_Pytorch import network
 import torchmetrics
 import random
 
