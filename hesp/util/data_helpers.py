@@ -17,7 +17,7 @@ import torchvision.transforms.functional as TF
 import matplotlib.pyplot as plt
 
 # change depending on where the folder is located
-PASCAL_ROOT = "datasets/pascal/data/"
+PASCAL_ROOT = "datasets/pascal/data/VOCdevkit/VOC2012/"
 COCO_ROOT = "datasets/coco/data/"
 
 

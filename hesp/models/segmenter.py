@@ -119,12 +119,7 @@ class Segmenter(AbstractModel):
                     self.labels[valid_mask],
                     self.tree)
         
-        if self.steps % 5 == 0:
-            print(hce_loss.item())            
-        
         self.running_loss += hce_loss.item()
-        
-        # print(self.running_loss / self.steps)
             
         self.clip_norms()
         
