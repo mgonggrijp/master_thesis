@@ -154,8 +154,7 @@ class Segmenter(AbstractModel):
                 self.images = images.to(self.device)
                 self.labels = labels.to(self.device).squeeze()
                 
-                for optim in self.optimizers:
-                    optim.zero_grad()
+                self.optimizer.zero_grad()
                 
                 # compute the conditional probabilities from the images
                 self.data_forward()
