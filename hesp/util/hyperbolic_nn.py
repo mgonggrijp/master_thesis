@@ -72,7 +72,7 @@ def exp_map_zero(inputs: np.array, c: torch.Tensor) -> torch.Tensor:
     return np_project(scaled_inputs, c)
 
 
-def torch_exp_map_zero(inputs: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
+def torch_exp_map_zero(inputs: torch.Tensor, c: torch.Tensor, EPS=EPS) -> torch.Tensor:
     EPS = torch.tensor(EPS, device=inputs.device)
     
     sqrt_c = torch.sqrt(c)

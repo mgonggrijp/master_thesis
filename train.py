@@ -6,7 +6,6 @@ from hesp.models.model import model_factory
 from hesp.util import data_helpers
 import geoopt
 from hesp.util.loss import *
-from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 
@@ -317,10 +316,6 @@ if args.mode == 'segmenter':
             if '.bn' in name:
                 param.requires_grad = False
 
-    if args.freeze_bb:
-        for param in model.embedding_model.base_model.parameters():
-            param.requires_grad = False
-
     learning_rate = args.slr if args.slr > 0 else config.dataset._INITIAL_LEARNING_RATE
     iters = args.num_epochs if args.num_epochs else config.dataset._NUM_EPOCHS
 
@@ -328,13 +323,20 @@ if args.mode == 'segmenter':
     schedulers = []
 
     # using the optimizer from geoopt that can work on manifold tensors
+    params = [  {'params' : model.embedding_space.offsets, 'lr' : args.slr},
+                {'params' : model.embedding_space.normals, 'lr' : args.slr},
+                {'params' : model.embedding_model.classifier.parameters(), 'lr' : args.slr}]
+    
+    if not args.freeze_bb:
+        params.append( {'params' : model.embedding_model.backbone.parameters(), 'lr' : args.slr / 10} )
+    
     optimizer = geoopt.optim.rsgd.RiemannianSGD(
-        [model.embedding_space.offsets, model.embedding_space.normals] + \
-            list(model.embedding_model.parameters()),
+        params,
         lr=learning_rate,
         momentum=config.segmenter._MOMENTUM,
         weight_decay=config.segmenter._WEIGHT_DECAY,
         stabilize=None)
+    
 
     scheduler = torch.optim.lr_scheduler.PolynomialLR(
         optimizer, total_iters=iters, power=0.9, last_epoch=-1, verbose=False)
