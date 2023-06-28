@@ -7,6 +7,9 @@ from hesp.util import loss
 from hesp.models.DeepLabV3Plus_Pytorch import network
 import torchmetrics
 import random
+from hesp.util.data_helpers import imshow
+
+from time import sleep
 
 
 class Segmenter(AbstractModel):
@@ -101,7 +104,7 @@ class Segmenter(AbstractModel):
                     normals=self.embedding_space.normals,
                     curvature=self.embedding_space.curvature)
         
-        max_value, max_index = torch.max(logits, dim=1)
+        # max_value, max_index = torch.max(logits, dim=1)
 
         self.cprobs = self.embedding_space.softmax(logits)
         
@@ -166,11 +169,18 @@ class Segmenter(AbstractModel):
                 self.images = images.to(self.device)
                 self.labels = labels.to(self.device).squeeze()
                 
+                # imshow(images.cpu(), labels.cpu())
+                
+                # for lab in labels:
+                    # print( torch.bincount(lab[lab != 255].flatten()), '\n\n' )
+                    # print(lab.unique(), '\n\n')
+                # sleep(5)
+                # print( labels )
+                
                 self.optimizer.zero_grad()
                 
                 # compute the conditional probabilities from the images
                 self.data_forward()
-                
                 
                 self.steps += 1
                 

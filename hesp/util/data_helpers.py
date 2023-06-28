@@ -21,12 +21,14 @@ PASCAL_ROOT = "datasets/pascal/data/VOCdevkit/VOC2012/"
 COCO_ROOT = "datasets/coco/data/"
 
 def imshow(images, labels):
+    
     if images.shape[0] > 1:
         for i, (img, lab) in enumerate( zip(images, labels) ):
             img = img.moveaxis(0, -1).numpy()
             lab = lab.squeeze().numpy()
-            plt.imshow(img); plt.savefig('img_{}.png'.format(i)); plt.close();
-            plt.imshow(lab); plt.savefig('lab_{}.png'.format(i)); plt.close();
+            # plt.imshow(img); plt.savefig('img_{}.png'.format(i)); plt.close();
+            plt.imshow(lab); plt.savefig('lab_{}.png'.format(i)); plt.show(); plt.close();
+            
     else:
         img = img.moveaxis(0, -1).numpy()
         lab = lab.squeeze().numpy()
@@ -64,8 +66,8 @@ def transforms(dataset, image: torch.Tensor, labels: torch.Tensor):
             
             
             _, h, w = image.shape
-            top  = random.randint(0, int(.5 * h)) # uniform offset
-            left  = random.randint(0, int(.5 * w)) # uniform offset
+            top  = random.randint(0, int(0.5 * h)) # uniform offset
+            left  = random.randint(0, int(0.5 * w)) # uniform offset
             
             image = TF.crop(
                 image,
@@ -111,16 +113,8 @@ def transforms(dataset, image: torch.Tensor, labels: torch.Tensor):
             torchvision.transforms.InterpolationMode.NEAREST,
             antialias=False)
         
-        _, h_non_zeros, w_non_zeros = torch.where(image != 0.)
+        # Specify the value to be replaced and the replacement value
         
-        # After cropping, set the cropping background to the ignore label instead of 0.
-        # It can happen that the image contains only zeros after cropping
-        if len(h_non_zeros) and len(w_non_zeros): 
-            labels[:, torch.max(h_non_zeros) :, :] = dataset.pad_label  
-            labels[:, : torch.min(h_non_zeros), :] = dataset.pad_label
-            labels[:, :, torch.max(w_non_zeros):] = dataset.pad_label
-            labels[:, :, : torch.min(w_non_zeros)] = dataset.pad_label
-            
         image = image - dataset.means.unsqueeze(-1).unsqueeze(-1)
 
         return image, labels
