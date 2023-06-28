@@ -319,9 +319,7 @@ if args.mode == 'segmenter':
     optimizers = []
     schedulers = []
 
-    "HEY TESTING HEY HEY IM GAY HAHA"
-
-        
+    # using the optimizer from geoopt that can work on manifold tensors
     optimizer = geoopt.optim.rsgd.RiemannianSGD(
         [model.embedding_space.offsets, model.embedding_space.normals] + \
             list(model.embedding_model.parameters()),
