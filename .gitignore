@@ -167,3 +167,11 @@ deeplab.py
 .xml
 
 .job
+
+Annotations/
+ImageSets/
+JPEGImages/
+SegmentationClass/
+SegmentationObject/
+VOCdevkit/
+VOC2012/
