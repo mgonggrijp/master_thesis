@@ -114,10 +114,8 @@ def transforms(dataset, image: torch.Tensor, labels: torch.Tensor):
             antialias=False)
         
         # Specify the value to be replaced and the replacement value
-        
-        
-        
-        
+                
+
         image = image - dataset.means.unsqueeze(-1).unsqueeze(-1)
 
         return image, labels

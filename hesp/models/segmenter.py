@@ -135,7 +135,7 @@ class Segmenter(AbstractModel):
 
         valid_labels = self.labels[valid_mask]
         
-        hce_loss = loss.CCE(valid_cprobs, valid_cprobs, self.tree)
+        hce_loss = loss.CCE(valid_cprobs, valid_labels, self.tree)
         
         self.running_loss += hce_loss.item()
             
