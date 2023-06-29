@@ -124,7 +124,6 @@ class Segmenter(AbstractModel):
             rec = self.recall_fn(preds, self.labels)
             
             if self.steps % 20 == 0:
-                torch.set_printoptions(sci_mode=False)
                 print('label unique', torch.unique(self.labels))
                 print('label bins', torch.bincount(self.labels[self.labels < 255].flatten(), minlength=21))
                 print('accuray', acc)       

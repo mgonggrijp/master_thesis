@@ -8,7 +8,9 @@ def CCE(cond_probs: torch.Tensor, labels: torch.Tensor, tree: Tree, steps) -> to
         
     log_probs = torch.log(torch.maximum(cond_probs, EPS)) 
      
-    log_sum_p = log_probs @ tree.hmat.T.to(cond_probs.device) 
+    hmat = tree.hmat.to(cond_probs.device)
+     
+    log_sum_p = log_probs @ hmat.T 
 
     # if steps % 10 == 0:
     #     _, indeces = log_sum_p[:, :21].max(-1)

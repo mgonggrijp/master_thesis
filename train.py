@@ -9,8 +9,6 @@ from hesp.util.loss import *
 import matplotlib.pyplot as plt
 
 
-
-
 # region argparse
 parser = argparse.ArgumentParser(
     description="Train models."
@@ -360,6 +358,10 @@ if args.mode == 'segmenter':
     # exit()
     
 # endregion model and data init
+    torch.set_printoptions(threshold=float('inf'))
+    torch.set_printoptions(sci_mode=False)
+    print(model.tree.hmat)
+    exit()
     
     torch.set_printoptions(sci_mode=False)
     model.train(train_loader, val_loader, optimizer, scheduler)
