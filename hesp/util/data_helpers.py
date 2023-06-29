@@ -21,20 +21,13 @@ PASCAL_ROOT = "datasets/pascal/data/VOCdevkit/VOC2012/"
 COCO_ROOT = "datasets/coco/data/"
 
 def imshow(images, labels):
-    
-    if images.shape[0] > 1:
-        for i, (img, lab) in enumerate( zip(images, labels) ):
-            img = img.moveaxis(0, -1).numpy()
-            lab = lab.squeeze().numpy()
-            # plt.imshow(img); plt.savefig('img_{}.png'.format(i)); plt.close();
-            plt.imshow(lab); plt.savefig('lab_{}.png'.format(i)); plt.show(); plt.close();
-            
-    else:
+    for i, (img, lab) in enumerate( zip(images, labels) ):
         img = img.moveaxis(0, -1).numpy()
         lab = lab.squeeze().numpy()
-        plt.imshow(img); plt.savefig('img_{}.png'.format(i)); plt.close();
-        plt.imshow(lab); plt.savefig('lab_{}.png'.format(i)); plt.close();
-
+        plt.imshow(img); # plt.savefig('img_{}.png'.format(i)); plt.close()
+        plt.show()
+        plt.imshow(lab); # plt.savefig('lab_{}.png'.format(i)); plt.show(); plt.close()
+        plt.show()
 
 def transforms(dataset, image: torch.Tensor, labels: torch.Tensor):
         """ Applies transformations to the image during inference and training. 
@@ -64,20 +57,17 @@ def transforms(dataset, image: torch.Tensor, labels: torch.Tensor):
                 torchvision.transforms.InterpolationMode.NEAREST,
                 antialias=False)
             
-            
             _, h, w = image.shape
             top  = random.randint(0, int(0.5 * h)) # uniform offset
             left  = random.randint(0, int(0.5 * w)) # uniform offset
             
             image = TF.crop(
-                image,
-                top, left,
-                int(0.5 * h), int(0.5 * w))
+                image, top, left, int(0.5 * h), int(0.5 * w))
             
             labels = TF.crop(
-                labels,
-                top, left,
-                int(0.5 * h), int(0.5 * w))
+                labels, top, left, int(0.5 * h), int(0.5 * w))
+            
+            
             
             if random.random() > .5:
                 image = TF.hflip(image)
@@ -95,26 +85,71 @@ def transforms(dataset, image: torch.Tensor, labels: torch.Tensor):
         _, h, w = image.shape
         if h > w:
             crop_h, crop_w = h, h
+            
         else:
             crop_h, crop_w = w, w
-
-        image = TF.center_crop(image, [crop_h, crop_w])
-        labels = TF.center_crop(labels, [crop_h, crop_w])
-
+            
+        print(h, w)
+        print(crop_w, crop_h)
+        center_h = int(h * 0.5)
+        center_w = int(w * 0.5)
+        print(center_h, center_w)
+        
+        upper_h = center_h + int(0.5 * crop_h) - 1
+        lower_h = center_w - int(0.5 * crop_h) + 1
+        
+        upper_w = center_h + int(0.5 * crop_w) - 1
+        lower_w = center_w - int(0.5 * crop_w) + 1
+        
+        new_labels = torch.ones(crop_h, crop_w, dtype=labels.dtype) * 255
+        new_image = torch.zeros(image.size(0), crop_h, crop_w, dtype=image.dtype)
+        
+        new_labels[:h, :w] = labels
+        new_image[:, :h, :w] = image
+        
         image = TF.resize(
-            image,
+            new_image,
             dataset.output_size,
             torchvision.transforms.InterpolationMode.BILINEAR,
             antialias=True)
         
         labels = TF.resize(
-            labels,
+            new_labels.unsqueeze(0),
             dataset.output_size,
             torchvision.transforms.InterpolationMode.NEAREST,
             antialias=False)
         
-        # Specify the value to be replaced and the replacement value
+        replace_background = False
+        
+        if replace_background:
+            # Define the value you want to replace and the replacement value
+            value_to_replace = 0
+            replacement_value = 255
+            
+            # before = (labels == value_to_replace).sum()
+            
+            # Find the indices where the value occurs
+            rows, cols = torch.where(labels.squeeze() == value_to_replace)
+
+            # probability of replacement
+            p = 0.9
+
+            # make a mask of true / false with probability p at the size of the replacement indeces        
+            choose_subset = torch.rand(rows.size()) < p
+            
+            # generate a random subset of these indeces
+            rows_subset, cols_subset = rows[choose_subset], cols[choose_subset]
+
+            # replace the value on this random subset of indeces
+            if labels.dim() == 4:
+                labels[:, :, rows_subset, cols_subset] = replacement_value
                 
+            if labels.dim() == 3:
+                labels[:, rows_subset, cols_subset] = replacement_value
+                
+            if labels.dim() == 2:
+                labels[rows_subset, cols_subset] = replacement_value
+            
 
         image = image - dataset.means.unsqueeze(-1).unsqueeze(-1)
 
@@ -177,7 +212,7 @@ class PascalDataset(torch.utils.data.Dataset):
             image, labels = self.transforms(
                 self,
                 image=image,
-                labels=labels.unsqueeze(0))
+                labels=labels.squeeze())
 
         return image, labels, index
 

@@ -92,6 +92,7 @@ parser.add_argument(
 parser.add_argument(
     "--seed",
     type=float,
+    default=None,
 )
 
 parser.add_argument(
@@ -311,7 +312,7 @@ if args.mode == 'segmenter':
     means = torch.load("datasets/" + args.dataset + "/means.pt")
     
     train_files, val_files = data_helpers.make_data_splits(
-        args.dataset, limit=args.data_limit, split=(0.9, 0.1), shuffle=False)
+        args.dataset, limit=args.data_limit, split=(0.9, 0.1), shuffle=True)
     
     train_loader = data_helpers.make_torch_loader(
         args.dataset, train_files, config, mode='train')
@@ -354,16 +355,6 @@ if args.mode == 'segmenter':
     print("".join([arg + ' : ' + str(args.__dict__[arg]) + "\n" for arg in args.__dict__]))
     
     
-    counts = torch.zeros(21,)
-    for _, lab, _ in train_loader:
-        for l in lab:
-            clean = l[l != 255]
-            if clean.shape[0] > 0:
-                class_ = clean.max()
-                counts[class_] += (l == class_).sum()
-    frac =  counts / counts.sum() 
-    print(frac)    
-    exit()
 # endregion model and data init
     
     model.train(train_loader, val_loader, optimizer, scheduler)
