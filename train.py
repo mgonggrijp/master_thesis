@@ -354,6 +354,12 @@ if args.mode == 'segmenter':
     
     print("".join([arg + ' : ' + str(args.__dict__[arg]) + "\n" for arg in args.__dict__]))
     
+    from hesp.util.data_helpers import imshow
+    
+    for images, labels, _ in train_loader:
+        imshow(images, labels)
+        
+    exit()
     
 # endregion model and data init
     

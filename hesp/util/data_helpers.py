@@ -119,7 +119,7 @@ def transforms(dataset, image: torch.Tensor, labels: torch.Tensor):
             torchvision.transforms.InterpolationMode.NEAREST,
             antialias=False)
         
-        replace_background = False
+        replace_background = True
         
         if replace_background:
             # Define the value you want to replace and the replacement value
