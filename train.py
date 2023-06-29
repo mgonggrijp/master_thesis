@@ -361,5 +361,6 @@ if args.mode == 'segmenter':
     
 # endregion model and data init
     
+    torch.set_printoptions(sci_mode=False)
     model.train(train_loader, val_loader, optimizer, scheduler)
 

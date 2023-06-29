@@ -144,7 +144,6 @@ class Segmenter(AbstractModel):
             
 
     def train(self, train_loader, val_loader, optimizer, scheduler):
-        
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.computing_metrics = False
@@ -165,12 +164,10 @@ class Segmenter(AbstractModel):
             
             for images, labels, _ in train_loader:
                 self.optimizer.zero_grad()
-                
                 self.images = images.to(self.device)
                 self.labels = labels.to(self.device).squeeze()
                 
                 # imshow(images.cpu(), labels.cpu())
-                
                 # for lab in labels:
                     # print( torch.bincount(lab[lab != 255].flatten()), '\n\n' )
                     # print(lab.unique(), '\n\n')
@@ -179,12 +176,9 @@ class Segmenter(AbstractModel):
                 
                 # compute the conditional probabilities from the images
                 self.data_forward()
-                
-                self.steps += 1
-                
                 # update the model using the conditional probabilities and the labels
                 self.update_model()
-                
+                self.steps += 1
 
             self.steps = 0
             self.running_loss = 0.
