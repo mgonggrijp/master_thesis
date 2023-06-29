@@ -8,6 +8,7 @@ from hesp.models.DeepLabV3Plus_Pytorch import network
 import torchmetrics
 import random
 from hesp.util.data_helpers import imshow
+from pprint import pprint
 
 from time import sleep
 
@@ -74,23 +75,31 @@ class Segmenter(AbstractModel):
             ignore_index=255,
             validate_args=False).to(device)
         
+        self.recall_fn = torchmetrics.classification.MulticlassRecall(
+            config.dataset._NUM_CLASSES,
+            top_k=1,
+            average=None,
+            multidim_average='global',
+            ignore_index=255,
+            validate_args=False).to(device)
+        
         
     def clip_norms(self):
         clip = self.config.segmenter._GRAD_CLIP
         
-        torch.nn.utils.clip_grad_norm_(
-                [self.embedding_space.offsets,
-                 self.embedding_space.normals]\
-                + list(self.embedding_model.parameters()), clip)
+        # torch.nn.utils.clip_grad_norm_(
+        #         [self.embedding_space.offsets,
+        #          self.embedding_space.normals]\
+        #         + list(self.embedding_model.parameters()), clip)
         
-        # torch.nn.utils.clip_grad_norm_(
-            # self.embedding_space.offsets, clip)
+        torch.nn.utils.clip_grad_norm_(
+            self.embedding_space.offsets, clip)
             
-        # torch.nn.utils.clip_grad_norm_(
-            # self.embedding_space.normals, clip)
-        # 
-        # torch.nn.utils.clip_grad_norm_(
-            # self.embedding_model.parameters(), clip)
+        torch.nn.utils.clip_grad_norm_(
+            self.embedding_space.normals, clip)
+        
+        torch.nn.utils.clip_grad_norm_(
+            self.embedding_model.parameters(), clip)
     
     
     def data_forward(self):
@@ -109,26 +118,28 @@ class Segmenter(AbstractModel):
         if self.computing_metrics or self.train_metrics:
             joints = self.embedding_space.get_joints(self.cprobs)
             preds = self.embedding_space.decide(joints)
-            self.iou_fn.forward(preds, self.labels)
-            self.acc_fn.forward(preds, self.labels)
             
+            iou = self.iou_fn.forward(preds, self.labels)
+            acc = self.acc_fn.forward(preds, self.labels)
+            rec = self.recall_fn(preds, self.labels)
+            
+            if self.steps % 20 == 0:
+                torch.set_printoptions(sci_mode=False)
+                print('label unique', torch.unique(self.labels))
+                print('label bins', torch.bincount(self.labels[self.labels < 255].flatten(), minlength=21))
+                print('accuray', acc)       
+                print('recall', rec)         
+                print('\n\n\n')    
+        
         
     def update_model(self):
-        
         valid_mask = self.labels <= self.tree.M - 1
-        
         valid_cprobs = self.cprobs.moveaxis(1, -1)[valid_mask]
-
         valid_labels = self.labels[valid_mask]
-        
         hce_loss = loss.CCE(valid_cprobs, valid_labels, self.tree, self.steps)
-        
         self.running_loss += hce_loss.item()
-            
         self.clip_norms()
-        
         hce_loss.backward()
-        
         self.optimizer.step()
             
 
@@ -153,6 +164,8 @@ class Segmenter(AbstractModel):
             self.steps = 0
             
             for images, labels, _ in train_loader:
+                self.optimizer.zero_grad()
+                
                 self.images = images.to(self.device)
                 self.labels = labels.to(self.device).squeeze()
                 
@@ -163,8 +176,6 @@ class Segmenter(AbstractModel):
                     # print(lab.unique(), '\n\n')
                 # sleep(5)
                 # print( labels )
-                
-                self.optimizer.zero_grad()
                 
                 # compute the conditional probabilities from the images
                 self.data_forward()
@@ -182,21 +193,37 @@ class Segmenter(AbstractModel):
             
             # compute and print the metrics for the training data
             if self.train_metrics:
+                print('----------------[Training Metrics Epoch {}]----------------\n'.format(edx))
                 self.compute_metrics()
+                print('----------------[End Training Metrics Epoch {}]----------------\n'.format(edx))
                 
             # compute and print the metrics for the validation data
             if self.val_metrics:
+                print('----------------[Validation Metrics Epoch {}]----------------\n'.format(edx))
                 self.compute_metrics_dataset(val_loader)
+                print('----------------[End Validation Metrics Epoch {}]----------------\n'.format(edx))
                 
             
     def compute_metrics(self):
-        accuracy = self.acc_fn.compute()
-        miou = self.iou_fn.compute()
-        print('     [train metrics]',
-              '\n\n[accuracy per class]', accuracy.tolist(),
-              '\n\n[miou per class]', miou.tolist(),
-              '\n\n[mean accuracy]', accuracy.mean().item(),
-              '\n\n[mean miou]', miou.mean().item(), '\n\n')
+        
+        if self.config.dataset._NAME == 'pascal':
+            i2c_file = "datasets/pascal/PASCAL_i2c.txt"
+        
+        with open(i2c_file, "r") as f:
+            i2c = {i : line.split(":")[1][:-1] for i, line in enumerate(f.readlines()) }
+        
+        accuracy = self.acc_fn.compute().cpu()
+        miou = self.iou_fn.compute().cpu()
+        recall = self.recall_fn.compute().cpu()
+        
+        metrics = {'acc per class' : accuracy,
+                   'miou per class' : miou,
+                   'recall per class' : recall}
+        
+        ncls = accuracy.size(0)
+        
+        self.print_metrics(metrics, ncls, i2c)
+
         self.iou_fn.reset()
         self.acc_fn.reset()
     
@@ -204,7 +231,6 @@ class Segmenter(AbstractModel):
     def compute_metrics_dataset(self, loader: torch.utils.data.DataLoader):
         
         with torch.no_grad():
-            metrics = {} 
             self.computing_metrics = True
             
             for images, labels, _ in loader:
@@ -212,20 +238,24 @@ class Segmenter(AbstractModel):
                 self.labels = labels.to(self.device).squeeze()
                 self.data_forward()
                 
-            miou_per_class = self.iou_fn.compute()
-            metrics['miou per class'] = torch.round(miou_per_class, decimals=5)
-            metrics['miou'] = round(miou_per_class.mean().item(), 5)
-
-            acc_per_class = self.acc_fn.compute()
-            metrics['acc per class'] = torch.round(acc_per_class, decimals=5)
-            metrics['acc'] = round(acc_per_class.mean().item(), 5)
-            
-            print('     [validation metrics]',
-                '\n\n[accuracy per class]', metrics['acc per class'].tolist(),
-                '\n\n[miou per class]', metrics['miou per class'].tolist(),
-                '\n\n[mean accuracy]', metrics['acc'],
-                '\n\n[mean miou]', metrics['miou'], '\n\n')
-            
-            self.iou_fn.reset()
-            self.acc_fn.reset()
+            self.compute_metrics()
             self.computing_metrics = False
+
+
+    def print_metrics(self, metrics, ncls, i2c):
+        print('\n\n[accuracy per class]')
+        self.pretty_print([(i2c[i], metrics['acc per class'][i].item()) for i in range(ncls) ])
+        
+        print('\n\n[miou per class]')
+        self.pretty_print([(i2c[i], metrics['miou per class'][i].item()) for i in range(ncls) ])
+        
+        print('\n\n[recall per class]')
+        self.pretty_print([(i2c[i], metrics['recall per class'][i].item()) for i in range(ncls) ])
+        
+        
+    def pretty_print(self, metrics_list):
+        target = 15
+        for label, x in metrics_list:
+            offset = target - len(label)
+            print(label, " "*offset, x)
+            

@@ -29,6 +29,26 @@ def imshow(images, labels):
         plt.imshow(lab); # plt.savefig('lab_{}.png'.format(i)); plt.show(); plt.close()
         plt.show()
 
+
+def random_replace(labels, value_to_replace, p, replacement_value=255):
+    """ Randomly replace pixels in labels with probability p with the replace value """
+    
+    # Find the indices where the value occurs
+    rows, cols = torch.where(labels.squeeze() == value_to_replace)
+
+    # make a mask of true / false with probability p at the size of the replacement indeces        
+    choose_subset = torch.rand(rows.size()) < p
+    
+    # generate a random subset of these indeces
+    rows_subset, cols_subset = rows[choose_subset], cols[choose_subset]
+
+    # replace the value on this random subset of indeces
+    labels[rows_subset, cols_subset] = replacement_value
+    
+    return labels
+        
+
+
 def transforms(dataset, image: torch.Tensor, labels: torch.Tensor):
         """ Applies transformations to the image during inference and training. 
         
@@ -89,11 +109,8 @@ def transforms(dataset, image: torch.Tensor, labels: torch.Tensor):
         else:
             crop_h, crop_w = w, w
             
-        print(h, w)
-        print(crop_w, crop_h)
         center_h = int(h * 0.5)
         center_w = int(w * 0.5)
-        print(center_h, center_w)
         
         upper_h = center_h + int(0.5 * crop_h) - 1
         lower_h = center_w - int(0.5 * crop_h) + 1
@@ -118,42 +135,26 @@ def transforms(dataset, image: torch.Tensor, labels: torch.Tensor):
             dataset.output_size,
             torchvision.transforms.InterpolationMode.NEAREST,
             antialias=False)
+
+        labels = labels.squeeze()
+
+        labels = random_replace(
+            labels, 
+            value_to_replace=0,
+            p=0.9,
+            replacement_value=255)
         
-        replace_background = True
+        human_label = 15
+        if human_label in labels:
+            labels = random_replace(
+                labels,
+                value_to_replace=human_label,
+                p=0.3,
+                replacement_value=255)
         
-        if replace_background:
-            # Define the value you want to replace and the replacement value
-            value_to_replace = 0
-            replacement_value = 255
-            
-            # before = (labels == value_to_replace).sum()
-            
-            # Find the indices where the value occurs
-            rows, cols = torch.where(labels.squeeze() == value_to_replace)
-
-            # probability of replacement
-            p = 0.9
-
-            # make a mask of true / false with probability p at the size of the replacement indeces        
-            choose_subset = torch.rand(rows.size()) < p
-            
-            # generate a random subset of these indeces
-            rows_subset, cols_subset = rows[choose_subset], cols[choose_subset]
-
-            # replace the value on this random subset of indeces
-            if labels.dim() == 4:
-                labels[:, :, rows_subset, cols_subset] = replacement_value
-                
-            if labels.dim() == 3:
-                labels[:, rows_subset, cols_subset] = replacement_value
-                
-            if labels.dim() == 2:
-                labels[rows_subset, cols_subset] = replacement_value
-            
-
         image = image - dataset.means.unsqueeze(-1).unsqueeze(-1)
 
-        return image, labels
+        return image, labels.unsqueeze(0)
 
 
 def compute_dataset_means(dataset: torch.utils.data.Dataset):
