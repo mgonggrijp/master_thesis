@@ -131,10 +131,11 @@ class Segmenter(AbstractModel):
         
         valid_mask = self.labels <= self.tree.M - 1
         
-        hce_loss = loss.CCE(
-                    torch.moveaxis(self.cprobs, 1, -1)[valid_mask],
-                    self.labels[valid_mask],
-                    self.tree)
+        valid_cprobs = self.cprobs.moveaxis(1, -1)[valid_mask]
+
+        valid_labels = self.labels[valid_mask]
+        
+        hce_loss = loss.CCE(valid_cprobs, valid_cprobs, self.tree)
         
         self.running_loss += hce_loss.item()
             
