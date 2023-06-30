@@ -92,6 +92,13 @@ class Segmenter(torch.nn.Module):
             print('     [epoch]', edx)
             self.steps = 0
             
+            if edx > warmup_epochs:
+                print('[learning rate]', scheduler.get_last_lr())
+                
+            else:
+                print('[learning rate]', warmup_scheduler.get_last_lr())
+            
+            
             for images, labels, _ in train_loader:
                 labels = labels.to(self.device).squeeze()
                 images = images.to(self.device)
@@ -111,7 +118,7 @@ class Segmenter(torch.nn.Module):
                 
                 self.running_loss += hce_loss.item()
                 
-                if self.steps % 25 == 0 and self.steps > 0:
+                if self.steps % 2 == 0 and self.steps > 0:
                     accuracy = self.acc_fn.compute().cpu().mean().item()
                     miou = self.iou_fn.compute().cpu().mean().item()
                     recall = self.recall_fn.compute().cpu().mean().item()
@@ -120,6 +127,8 @@ class Segmenter(torch.nn.Module):
                     print('[accuracy]     ', accuracy)
                     print('[miou]         ', miou)
                     print('[recall]       ', recall)
+                    print('[learning rate]', optimizer)
+                    
                 
                 torch.nn.utils.clip_grad_norm_(
                     self.embedding_space.offsets,
@@ -137,11 +146,12 @@ class Segmenter(torch.nn.Module):
             self.steps = 0
             self.running_loss = 0.
             
-            if edx > warmup_epochs:
+            if edx > warmup_epochs - 1:
                 scheduler.step()
-                
+                print('scheduler step')
             else:
                 warmup_scheduler.step()
+                print('warmup scheduler step')
             
             
             # compute and print the metrics for the training data
