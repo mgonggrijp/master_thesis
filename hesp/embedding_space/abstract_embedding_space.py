@@ -21,14 +21,17 @@ class AbstractEmbeddingSpace(torch.nn.Module):
         self.EPS = torch.tensor(1e-15)
         self.PROJ_EPS = torch.tensor(1e-3)
         
-        std = torch.full(
+        std_normals = torch.full(
             size=[self.tree.M, self.dim], fill_value=0.05)
         
+        std_offsets = torch.full(
+            size=[self.tree.M, self.dim], fill_value=0.01)
+        
         self.normals = torch.nn.Parameter(
-            torch.normal(0.0, std), requires_grad=True)
+            torch.normal(0.0, std_normals), requires_grad=True)
 
         self.offsets = torch.nn.Parameter(
-            torch.zeros(self.tree.M, self.dim),
+            torch.normal(0.0, std_offsets),
             requires_grad=True)
         
         if config.embedding_space._GEOMETRY == 'hyperbolic':

@@ -66,19 +66,6 @@ class Segmenter(torch.nn.Module):
             ignore_index=255,
             validate_args=False)
         
-        
-    def clip_norms(self):
-        clip = self.config.segmenter._GRAD_CLIP
-        
-        torch.nn.utils.clip_grad_norm_(
-            self.embedding_space.offsets, clip)
-        
-        # torch.nn.utils.clip_grad_norm_(
-        #     self.embedding_space.normals, clip)
-        
-        # torch.nn.utils.clip_grad_norm_(
-        #     self.embedding_model.parameters(), clip)
-    
     
     def forward(self, images):
         embs = self.embedding_model(images)
@@ -86,7 +73,7 @@ class Segmenter(torch.nn.Module):
         return cprobs
 
             
-    def train_fn(self, train_loader, val_loader, optimizer, scheduler):
+    def train_fn(self, train_loader, val_loader, optimizer, scheduler, warmup_scheduler, warmup_epochs):
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.computing_metrics = True
@@ -134,7 +121,9 @@ class Segmenter(torch.nn.Module):
                     print('[miou]         ', miou)
                     print('[recall]       ', recall)
                 
-                self.clip_norms()
+                torch.nn.utils.clip_grad_norm_(
+                    self.embedding_space.offsets,
+                    self.config.segmenter._GRAD_CLIP)
                 
                 hce_loss.backward()
                 
@@ -147,7 +136,13 @@ class Segmenter(torch.nn.Module):
 
             self.steps = 0
             self.running_loss = 0.
-            scheduler.step()
+            
+            if edx > warmup_epochs:
+                scheduler.step()
+                
+            else:
+                warmup_scheduler.step()
+            
             
             # compute and print the metrics for the training data
             if self.computing_metrics:
