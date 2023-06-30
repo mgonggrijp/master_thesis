@@ -1,8 +1,10 @@
 from hesp.util.segmenter_helpers import *
 from hesp.config.config import Config
-from hesp.embedding_space.embedding_space import EmbeddingSpace
+# from hesp.embedding_space.embedding_space import EmbeddingSpace
+from hesp.embedding_space.hyperbolic_embedding_space import HyperbolicEmbeddingSpace
+from hesp.embedding_space.euclidean_embedding_space import EuclideanEmbeddingSpace
 from hesp.hierarchy.tree import Tree
-from hesp.models.abstract_model import AbstractModel
+# from hesp.models.abstract_model import AbstractModel
 from hesp.util import loss
 from hesp.models.DeepLabV3Plus_Pytorch import network
 import torchmetrics
@@ -13,43 +15,28 @@ from pprint import pprint
 from time import sleep
 
 
-class Segmenter(AbstractModel):
-    def __init__(
-            self,
-            tree: Tree,
-            config: Config,
-            train_embedding_space: bool,
-            prototype_path: str,
-            device: torch.device,
-            save_folder: str = "saves/",
-            seed: float = None):
-
+class Segmenter(torch.nn.Module):
+    def __init__(self, tree: Tree, config: Config, save_folder: str = "saves/", seed: float = None):
+        super().__init__()
         self.save_folder = save_folder
         self.config = config
         self.tree = tree
-        self.device = device
         self.seed = seed
         self.train_metrics = config.segmenter._TRAIN_METRICS
         self.val_metrics = config.segmenter._VAL_METRICS
 
-        self.embedding_space = EmbeddingSpace(
-            tree=tree,
-            device=device,
-            config=config,
-            train=train_embedding_space,
-            prototype_path=prototype_path)
+        if config.embedding_space._GEOMETRY == 'hyperbolic':
+            self.embedding_space = HyperbolicEmbeddingSpace(tree, config)
+            
+        if config.embedding_space._GEOMETRY == 'euclidean':
+            self.embedding_space = EuclideanEmbeddingSpace(tree, config)
 
         self.embedding_model = network.modeling._load_model(
             arch_type=config.base_model_name,
             backbone=config.segmenter._BACKBONE,
             num_classes=config.segmenter._EFN_OUT_DIM,
             output_stride=config.segmenter._OUTPUT_STRIDE,
-            pretrained_backbone=config.segmenter._PRE_TRAINED_BB).to(device)
-
-        if self.config.segmenter._ZERO_LABEL:
-            raise NotImplementedError()
-            # self.unseen_idxs = [tree.c2i[c]
-            #                     for c in config.dataset._UNSEEN]
+            pretrained_backbone=config.segmenter._PRE_TRAINED_BB).to('cuda')
 
         # continue training using previous model state and embedding space offsets / normals
         if config.segmenter._RESUME:
@@ -66,14 +53,14 @@ class Segmenter(AbstractModel):
             config.dataset._NUM_CLASSES,
             average=None,
             ignore_index=255,
-            validate_args=False).to(device)
+            validate_args=False)
         
         self.acc_fn = torchmetrics.classification.MulticlassAccuracy(
             config.dataset._NUM_CLASSES,
             average=None, 
             multidim_average='global',
             ignore_index=255,
-            validate_args=False).to(device)
+            validate_args=False)
         
         self.recall_fn = torchmetrics.classification.MulticlassRecall(
             config.dataset._NUM_CLASSES,
@@ -81,7 +68,7 @@ class Segmenter(AbstractModel):
             average=None,
             multidim_average='global',
             ignore_index=255,
-            validate_args=False).to(device)
+            validate_args=False)
         
         
     def clip_norms(self):
@@ -102,50 +89,28 @@ class Segmenter(AbstractModel):
             self.embedding_model.parameters(), clip)
     
     
-    def data_forward(self):
-        embs = self.embedding_model(self.images)
-        
-        proj_embs = self.embedding_space.project(embs)
-        
-        logits = self.embedding_space.logits(
-                    embeddings=proj_embs,
-                    offsets=self.embedding_space.offsets,
-                    normals=self.embedding_space.normals,
-                    curvature=self.embedding_space.curvature)
-        
-        self.cprobs = self.embedding_space.softmax(logits)
+    def forward(self, images):
+        embs = self.embedding_model(images)
+        cprobs = self.embedding_space(embs)        
   
         if self.computing_metrics or self.train_metrics:
-            joints = self.embedding_space.get_joints(self.cprobs)
-            preds = self.embedding_space.decide(joints)
             
-            iou = self.iou_fn.forward(preds, self.labels)
-            acc = self.acc_fn.forward(preds, self.labels)
-            rec = self.recall_fn(preds, self.labels)
-            
-            if self.steps % 20 == 0:
-                print('label unique', torch.unique(self.labels))
-                print('label bins', torch.bincount(self.labels[self.labels < 255].flatten(), minlength=21))
-                print('accuray', acc)       
-                print('recall', rec)         
-                print('\n\n\n')    
-        
-        
-    def update_model(self):
-        valid_mask = self.labels <= self.tree.M - 1
-        valid_cprobs = self.cprobs.moveaxis(1, -1)[valid_mask]
-        valid_labels = self.labels[valid_mask]
-        hce_loss = loss.CCE(valid_cprobs, valid_labels, self.tree, self.steps)
-        self.running_loss += hce_loss.item()
-        self.clip_norms()
-        hce_loss.backward()
-        self.optimizer.step()
-            
+            with torch.no_grad():
+                joints = self.embedding_space.get_joints(self.cprobs)
+                preds = self.embedding_space.decide(joints)
+                
+                iou = self.iou_fn.forward(preds, self.labels)
+                acc = self.acc_fn.forward(preds, self.labels)
+                rec = self.recall_fn(preds, self.labels)
+                
+        return cprobs
 
-    def train(self, train_loader, val_loader, optimizer, scheduler):
+            
+    def train_fn(self, train_loader, val_loader, optimizer, scheduler):
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.computing_metrics = False
+        self.train()
         
         if type(self.seed) == float:
             print('random seed', self.seed)
@@ -163,25 +128,31 @@ class Segmenter(AbstractModel):
             
             for images, labels, _ in train_loader:
                 self.optimizer.zero_grad()
-                self.images = images.to(self.device)
                 self.labels = labels.to(self.device).squeeze()
+                images = images.to(self.device)
                 
-                # imshow(images.cpu(), labels.cpu())
-                # for lab in labels:
-                    # print( torch.bincount(lab[lab != 255].flatten()), '\n\n' )
-                    # print(lab.unique(), '\n\n')
-                # sleep(5)
-                # print( labels )
+                cprobs = self.forward(images)
                 
-                # compute the conditional probabilities from the images
-                self.data_forward()
-                # update the model using the conditional probabilities and the labels
-                self.update_model()
+                valid_mask = labels <= self.tree.M - 1
+                
+                valid_cprobs = cprobs.moveaxis(1, -1)[valid_mask]
+                
+                valid_labels = self.labels[valid_mask]
+                
+                hce_loss = loss.CCE(valid_cprobs, valid_labels, self.tree, self.steps)
+                
+                self.running_loss += hce_loss.item()
+                
+                self.clip_norms()
+                
+                hce_loss.backward()
+                
+                self.optimizer.step()
+                        
                 self.steps += 1
 
             self.steps = 0
             self.running_loss = 0.
-            
             scheduler.step()
             
             # compute and print the metrics for the training data

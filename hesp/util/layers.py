@@ -26,7 +26,7 @@ def torch_euc_mlr(inputs: torch.Tensor, P_mlr: torch.Tensor, A_mlr: torch.Tensor
     return pdota + xdota
 
 
-def torch_hyp_mlr(inputs: torch.Tensor, c: torch.Tensor, P_mlr: torch.Tensor, A_mlr: torch.Tensor, EPS=EPS) -> torch.Tensor:
+def torch_hyp_mlr(inputs: torch.Tensor, c: torch.Tensor, P_mlr: torch.Tensor, A_mlr: torch.Tensor, EPS) -> torch.Tensor:
     """ Perform hyperbolic MLR to calculate the class logits
     
     args:
@@ -36,8 +36,6 @@ def torch_hyp_mlr(inputs: torch.Tensor, c: torch.Tensor, P_mlr: torch.Tensor, A_
         
     returns:
         logits of shape (batch, num_classes, height_width)"""
-        
-    EPS = torch.tensor(EPS, device=inputs.device)
     
     xx = torch.linalg.norm(inputs, dim=1, keepdim=True)**2
     
@@ -49,8 +47,6 @@ def torch_hyp_mlr(inputs: torch.Tensor, c: torch.Tensor, P_mlr: torch.Tensor, A_
     
     sqsq = torch.multiply(
         c * xx, c * pp[None, :, None, None]) 
-    
-    
     
     A_norm = torch.linalg.norm(A_mlr, dim=1)  
     
@@ -70,7 +66,6 @@ def torch_hyp_mlr(inputs: torch.Tensor, c: torch.Tensor, P_mlr: torch.Tensor, A_
     
     mobaddnorm = ((alpha ** 2 * pp[None, :, None, None]) +
                   (beta ** 2 * xx) + (2 * alpha * beta * px))
-    
     
     maxnorm = (1.0 - PROJ_EPS) / sqrt(c)
   

@@ -1,6 +1,6 @@
-from abc import ABC, abstractmethod
+# from abc import ABC, abstractmethod
 
-class AbstractModel(ABC):
-    @abstractmethod
-    def train(self):
-        pass
+# class AbstractModel(torch.nn.Module):
+#     @abstractmethod
+#     def train(self):
+#         pass

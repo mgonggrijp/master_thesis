@@ -11,45 +11,44 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class AbstractEmbeddingSpace(ABC):
-    """General purpose base class for implementing embedding spaces.
-    Softmax function turns into hierarchical softmax only when the 'tree' has an hierarchal structure defined."""
-    offsets = None
-    normals = None
-    curvature = None
+class AbstractEmbeddingSpace(torch.nn.Module):
+    def __init__(self, tree: Tree, config: Config):
+        super().__init__()
 
-    def __init__(self, tree: Tree, device, config: Config, train: bool = True, prototype_path: str = ''):
         self.tree = tree
         self.config = config
         self.dim = config.embedding_space._DIM
-        self.device = device
+        self.EPS = torch.tensor(1e-15)
+        self.PROJ_EPS = torch.tensor(1e-3)
         
-        self.normals = torch.normal(
-            mean=0.0,
-            std=torch.full(
-                size=[self.tree.M, self.dim],
-                fill_value=0.05)).to(device)
+        std = torch.full(
+            size=[self.tree.M, self.dim], fill_value=0.05)
         
-        self.normals.requires_grad_()
+        self.normals = torch.nn.Parameter(
+            torch.normal(0.0, std), requires_grad=True)
 
-        self.offsets = torch.zeros(
-            size=[self.tree.M, self.dim],
-            requires_grad=True,
-            device=device)
+        self.offsets = torch.nn.Parameter(
+            torch.zeros(self.tree.M, self.dim),
+            requires_grad=True)
         
         if config.embedding_space._GEOMETRY == 'hyperbolic':
             
             pcb = geoopt.manifolds.PoincareBall(
                 c=config.embedding_space._INIT_CURVATURE)
             
-            self.offsets = geoopt.ManifoldTensor(
-                            self.offsets,
-                            manifold=pcb,
-                            device=device,
-                            requires_grad=True)
+            self.offsets = geoopt.ManifoldParameter(
+                            self.offsets, manifold=pcb, requires_grad=True)
             
-            print('Offset manifold: ', self.offsets.manifold)
 
+    def forward(self, embeddings: torch.Tensor):
+        """ Takes in a set of embeddings and computes their class probabilities. """
+        
+        proj_embs = self.project(embeddings)
+        
+        cprobs = self.run(proj_embs)
+        
+        return cprobs
+        
 
     def softmax(self, logits):
 
@@ -60,7 +59,7 @@ class AbstractEmbeddingSpace(ABC):
 
         # matmul with sibmat to compute the sums over siblings for the normalizer Z
         Z = torch.tensordot(
-            exp_logits, self.tree.sibmat.to(self.device), dims=[[1], [-1]])  # sh (batch, height, width, num_nodes)
+            exp_logits, self.tree.sibmat, dims=[[1], [-1]])  # sh (batch, height, width, num_nodes)
         
         # reshape back to (batch, num_nodes, height, width)
         Z_reshaped = torch.moveaxis(Z, -1, 1)  
@@ -70,11 +69,12 @@ class AbstractEmbeddingSpace(ABC):
         
         return cond_probs 
 
+
     def decide(self, probs: torch.Tensor, unseen: list = []):
         """ Decide on leaf class from probabilities. """
         with torch.no_grad():
             cls_probs = probs[:, :self.tree.K, :]
-            hmat = self.tree.hmat[:self.tree.K, :self.tree.K].to(probs.device)
+            hmat = self.tree.hmat[:self.tree.K, :self.tree.K]
 
             cls_probs = torch.tensordot(cls_probs, hmat, dims=[[1], [-1]])
             cls_probs = torch.moveaxis(cls_probs, [1, 3], [2, 1])  # sh (batch, K, height, width)
@@ -88,31 +88,28 @@ class AbstractEmbeddingSpace(ABC):
 
         return predictions
 
-    def run(self, embeddings, offsets=None, normals=None, curvature=None):
+
+    def run(self, embeddings):
         """ Calculates (joint) probabilities for incoming embeddings. Assumes embeddings are already on manifold. """
-        if offsets is None:
-            offsets = self.offsets
-        if normals is None:
-            normals = self.normals
-        if curvature is None:
-            curvature = self.curvature
 
         logits = self.logits(
             embeddings=embeddings,
-            offsets=offsets,
-            normals=normals,
-            curvature=curvature)  # shape (B, M, H, W)
+            offsets=self.offsets,
+            normals=self.normals,
+            curvature=self.curvature)  # shape (B, M, H, W)
 
         cond_probs = self.softmax(logits)  # shape (B, M , H, W)
-        joints = self.get_joints(cond_probs)
+        
+        # joints = self.get_joints(cond_probs)
 
-        return joints, cond_probs
+        return cond_probs
+
 
     def get_joints(self, cond_probs):
         """ Calculates joint probabilities based on conditionals """
         log_probs = torch.log(cond_probs + 1e-15) 
         
-        hmat = self.tree.hmat.to(cond_probs.device)
+        hmat = self.tree.hmat
 
         log_sum_p = torch.tensordot(log_probs, hmat, dims=[[1], [-1]])  # sh (B, H, W, M)
 
@@ -123,7 +120,13 @@ class AbstractEmbeddingSpace(ABC):
 
         return final_joints
 
+
     @ abstractmethod
     def logits(self, embeddings, offsets=None, normals=None, curvature=None):
         """ Returns logits to pass to (hierarchical) softmax function."""
+        pass
+    
+    
+    @ abstractmethod
+    def project(self, embeddings, curvature):
         pass

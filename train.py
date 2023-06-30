@@ -8,6 +8,8 @@ import geoopt
 from hesp.util.loss import *
 import matplotlib.pyplot as plt
 
+torch.set_printoptions(threshold=float('inf'))
+torch.set_printoptions(sci_mode=False)
 
 # region argparse
 parser = argparse.ArgumentParser(
@@ -231,6 +233,8 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+# torch.set_default_device(args.device)
+
 if args.precision == '32':
     torch.set_default_dtype(torch.float32)
     
@@ -352,17 +356,7 @@ if args.mode == 'segmenter':
     
     print("".join([arg + ' : ' + str(args.__dict__[arg]) + "\n" for arg in args.__dict__]))
     
-    # from hesp.util.data_helpers import imshow
-    # for images, labels, _ in train_loader:
-    #     imshow(images, labels)
-    # exit()
     
 # endregion model and data init
-    torch.set_printoptions(threshold=float('inf'))
-    torch.set_printoptions(sci_mode=False)
-    print(model.tree.hmat)
-    exit()
-    
-    torch.set_printoptions(sci_mode=False)
     model.train(train_loader, val_loader, optimizer, scheduler)
 

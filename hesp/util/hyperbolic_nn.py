@@ -59,6 +59,7 @@ def np_project(x: np.array, c: torch.Tensor) -> torch.Tensor:
 
 def exp_map_zero(inputs: np.array, c: torch.Tensor) -> torch.Tensor:
     inputs = inputs + EPS
+    
     norm = np.linalg.norm(inputs, dim=1)
 
     gamma = np.tanh(
@@ -72,9 +73,7 @@ def exp_map_zero(inputs: np.array, c: torch.Tensor) -> torch.Tensor:
     return np_project(scaled_inputs, c)
 
 
-def torch_exp_map_zero(inputs: torch.Tensor, c: torch.Tensor, EPS=EPS) -> torch.Tensor:
-    EPS = torch.tensor(EPS, device=inputs.device)
-    
+def torch_exp_map_zero(inputs: torch.Tensor, c: torch.Tensor, EPS) -> torch.Tensor:
     sqrt_c = torch.sqrt(c)
 
     norm = torch.linalg.norm(

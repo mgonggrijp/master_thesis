@@ -7,20 +7,17 @@ from hesp.config.config import Config
 from hesp.hierarchy.tree import Tree
 import torch
 
-torch.set_default_dtype(torch.float32)
 
 class EuclideanEmbeddingSpace(AbstractEmbeddingSpace):
-    def __init__(self, tree: Tree, device, config: Config, train: bool = True, prototype_path: str = ''):
-        super().__init__(tree=tree, device=device, config=config,
-                         train=train, prototype_path=prototype_path)
+    def __init__(self, tree: Tree, config: Config,):
+        super().__init__(tree, config)
+        
         self.geometry = 'euclidean'
         # sanity check
         assert self.geometry == config.embedding_space._GEOMETRY, 'config geometry does not match embedding spaces'
 
-
-    def project(self, embeddings, curvature=0):
+    def project(self, embeddings):
         return embeddings
-    
 
-    def logits(self, embeddings: torch.tensor, offsets: torch.tensor, normals: torch.tensor, curvature=0):
+    def logits(self, embeddings: torch.tensor, offsets: torch.tensor, normals: torch.tensor):
         return torch_euc_mlr(embeddings, P_mlr=offsets, A_mlr=normals)

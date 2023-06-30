@@ -23,11 +23,7 @@ def model_factory(config):
     model_params = {
         'tree': class_tree,
         'config': config,
-        'train_embedding_space': train_embedding_space,
-        'prototype_path': prototype_path,
-        'device': config.segmenter._DEVICE,
         'save_folder': config.segmenter._SAVE_FOLDER,
-        'seed' : config.segmenter._SEED,
-    }
+        'seed' : config.segmenter._SEED}
     
     return Segmenter(**model_params)
