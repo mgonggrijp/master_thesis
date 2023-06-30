@@ -73,11 +73,11 @@ class Segmenter(torch.nn.Module):
         torch.nn.utils.clip_grad_norm_(
             self.embedding_space.offsets, clip)
         
-        torch.nn.utils.clip_grad_norm_(
-            self.embedding_space.normals, clip)
+        # torch.nn.utils.clip_grad_norm_(
+        #     self.embedding_space.normals, clip)
         
-        torch.nn.utils.clip_grad_norm_(
-            self.embedding_model.parameters(), clip)
+        # torch.nn.utils.clip_grad_norm_(
+        #     self.embedding_model.parameters(), clip)
     
     
     def forward(self, images):
@@ -100,7 +100,7 @@ class Segmenter(torch.nn.Module):
         print('training..')
         
         self.running_loss = 0.
-        global_steps = 0
+        self.global_step = 0
         for edx in range(self.config.segmenter._NUM_EPOCHS):
             print('     [epoch]', edx)
             self.steps = 0
@@ -128,13 +128,13 @@ class Segmenter(torch.nn.Module):
                     accuracy = self.acc_fn.compute().cpu().mean().item()
                     miou = self.iou_fn.compute().cpu().mean().item()
                     recall = self.recall_fn.compute().cpu().mean().item()
-                    print('[global step]  ', global_steps)
+                    print('[global step]  ', self.global_step)
                     print('[average loss] ', self.running_loss / (self.steps + 1))
                     print('[accuracy]     ', accuracy)
                     print('[miou]         ', miou)
                     print('[recall]       ', recall)
                 
-                # self.clip_norms()
+                self.clip_norms()
                 
                 hce_loss.backward()
                 
@@ -143,7 +143,7 @@ class Segmenter(torch.nn.Module):
                 self.optimizer.zero_grad()
                 
                 self.steps += 1
-                global_steps += 1
+                self.global_step += 1
 
             self.steps = 0
             self.running_loss = 0.
@@ -216,9 +216,10 @@ class Segmenter(torch.nn.Module):
         print('\n\n[recall per class]')
         self.pretty_print([(i2c[i], metrics['recall per class'][i].item()) for i in range(ncls) ])
         
-        print('[Average MIOU]      ', metrics['miou per class'].mean().item(), 
-            '\n[Average Accuracy]  ', metrics['acc per class'].mean().item(), 
-            '\n[Average Recall]    ', metrics['recall per class'].mean().item())
+        print('\n\n[Global Step]       ', self.global_step,
+                '\n[Average MIOU]      ', metrics['miou per class'].mean().item(), 
+                '\n[Average Accuracy]  ', metrics['acc per class'].mean().item(), 
+                '\n[Average Recall]    ', metrics['recall per class'].mean().item())
         
     def pretty_print(self, metrics_list):
         target = 15

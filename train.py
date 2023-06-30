@@ -330,18 +330,18 @@ if args.mode == 'segmenter':
     emb_space_params = {"params" : model.embedding_space.parameters(), "lr" : 0.01}
     parameters = [backbone_params, classifier_params, emb_space_params]    
 
-    # optimizer = geoopt.optim.rsgd.RiemannianSGD(
-    #     parameters,
-    #     lr=args.slr,
-    #     momentum=config.segmenter._MOMENTUM,
-    #     weight_decay=config.segmenter._WEIGHT_DECAY,
-    #     stabilize=None)
-    
-    optimizer = torch.optim.SGD(
+    optimizer = geoopt.optim.rsgd.RiemannianSGD(
         parameters,
         lr=args.slr,
         momentum=config.segmenter._MOMENTUM,
-        weight_decay=config.segmenter._WEIGHT_DECAY)
+        weight_decay=config.segmenter._WEIGHT_DECAY,
+        stabilize=None)
+    
+    # optimizer = torch.optim.SGD(
+    #     parameters,
+    #     lr=args.slr,
+    #     momentum=config.segmenter._MOMENTUM,
+    #     weight_decay=config.segmenter._WEIGHT_DECAY)
 
     scheduler = torch.optim.lr_scheduler.PolynomialLR(
         optimizer, total_iters=args.num_epochs, power=0.9, last_epoch=-1, verbose=False)

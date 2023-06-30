@@ -4,6 +4,6 @@ matplotlib
 Pillow
 opencv-python
 torchvision
-torch
+torch==2.0.0
 matplotlib
 torchmetrics
