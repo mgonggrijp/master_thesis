@@ -23,7 +23,8 @@ class Tree(object):
 
     """
 
-    def __init__(self, i2c, json={}):
+    def __init__(self, i2c, json={}, device='cpu'):
+        self.device = device       
         self.i2c = i2c
         self.K = max([i for i, c in self.i2c.items()]) + \
             1  # num classes = max int of class
@@ -105,20 +106,24 @@ class Tree(object):
         """ Build 'hmat', e.g. connection matrix of the hierarchy and
         'sibmat', e.g. matrix containing sibling connections
         """
-        self.hmat = torch.zeros((self.M, self.M))
-        self.sibmat = torch.zeros((self.M, self.M))
+        self.hmat = torch.zeros((self.M, self.M), device=self.device)
+        self.sibmat = torch.zeros((self.M, self.M), device=self.device)
 
         for i in range(self.M):  # excl. root
             if i in self.i2n:
                 concept = self.i2n[i]
+                
                 csib_idx = [self.n2i[s] for s in self.nodes[concept].siblings]
+                
                 self.sibmat[i] = torch.Tensor(
-                    [i in csib_idx for i in range(self.M)])
+                    [i in csib_idx for i in range(self.M)]).to(self.device)
+                
                 chierch_idx = [i] + [
                     self.n2i[a] for a in self.nodes[concept].ancestors if a != self.root
                 ]
+                
                 self.hmat[i] = torch.Tensor(
-                    [i in chierch_idx for i in range(self.M)])
+                    [i in chierch_idx for i in range(self.M)]).to(self.device)
 
     def init_graph(self, ):
         """ Initializes networkx graph, used for visualization. """

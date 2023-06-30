@@ -1,22 +1,17 @@
 from hesp.util.segmenter_helpers import *
 from hesp.config.config import Config
-# from hesp.embedding_space.embedding_space import EmbeddingSpace
 from hesp.embedding_space.hyperbolic_embedding_space import HyperbolicEmbeddingSpace
 from hesp.embedding_space.euclidean_embedding_space import EuclideanEmbeddingSpace
 from hesp.hierarchy.tree import Tree
-# from hesp.models.abstract_model import AbstractModel
 from hesp.util import loss
 from hesp.models.DeepLabV3Plus_Pytorch import network
 import torchmetrics
 import random
 from hesp.util.data_helpers import imshow
-from pprint import pprint
-
-from time import sleep
 
 
 class Segmenter(torch.nn.Module):
-    def __init__(self, tree: Tree, config: Config, save_folder: str = "saves/", seed: float = None):
+    def __init__(self, tree: Tree, config: Config, device, save_folder: str = "saves/", seed: float = None):
         super().__init__()
         self.save_folder = save_folder
         self.config = config
@@ -24,6 +19,7 @@ class Segmenter(torch.nn.Module):
         self.seed = seed
         self.train_metrics = config.segmenter._TRAIN_METRICS
         self.val_metrics = config.segmenter._VAL_METRICS
+        self.device = device
 
         if config.embedding_space._GEOMETRY == 'hyperbolic':
             self.embedding_space = HyperbolicEmbeddingSpace(tree, config)
@@ -36,7 +32,7 @@ class Segmenter(torch.nn.Module):
             backbone=config.segmenter._BACKBONE,
             num_classes=config.segmenter._EFN_OUT_DIM,
             output_stride=config.segmenter._OUTPUT_STRIDE,
-            pretrained_backbone=config.segmenter._PRE_TRAINED_BB).to('cuda')
+            pretrained_backbone=config.segmenter._PRE_TRAINED_BB)
 
         # continue training using previous model state and embedding space offsets / normals
         if config.segmenter._RESUME:
@@ -74,14 +70,9 @@ class Segmenter(torch.nn.Module):
     def clip_norms(self):
         clip = self.config.segmenter._GRAD_CLIP
         
-        # torch.nn.utils.clip_grad_norm_(
-        #         [self.embedding_space.offsets,
-        #          self.embedding_space.normals]\
-        #         + list(self.embedding_model.parameters()), clip)
-        
         torch.nn.utils.clip_grad_norm_(
             self.embedding_space.offsets, clip)
-            
+        
         torch.nn.utils.clip_grad_norm_(
             self.embedding_space.normals, clip)
         
@@ -92,24 +83,13 @@ class Segmenter(torch.nn.Module):
     def forward(self, images):
         embs = self.embedding_model(images)
         cprobs = self.embedding_space(embs)        
-  
-        if self.computing_metrics or self.train_metrics:
-            
-            with torch.no_grad():
-                joints = self.embedding_space.get_joints(self.cprobs)
-                preds = self.embedding_space.decide(joints)
-                
-                iou = self.iou_fn.forward(preds, self.labels)
-                acc = self.acc_fn.forward(preds, self.labels)
-                rec = self.recall_fn(preds, self.labels)
-                
         return cprobs
 
             
     def train_fn(self, train_loader, val_loader, optimizer, scheduler):
         self.optimizer = optimizer
         self.scheduler = scheduler
-        self.computing_metrics = False
+        self.computing_metrics = True
         self.train()
         
         if type(self.seed) == float:
@@ -120,43 +100,57 @@ class Segmenter(torch.nn.Module):
         print('training..')
         
         self.running_loss = 0.
-        
+        global_steps = 0
         for edx in range(self.config.segmenter._NUM_EPOCHS):
             print('     [epoch]', edx)
-            
             self.steps = 0
             
             for images, labels, _ in train_loader:
-                self.optimizer.zero_grad()
-                self.labels = labels.to(self.device).squeeze()
+                labels = labels.to(self.device).squeeze()
                 images = images.to(self.device)
                 
                 cprobs = self.forward(images)
+                
+                if self.computing_metrics:
+                    self.metrics_step(cprobs, labels)
                 
                 valid_mask = labels <= self.tree.M - 1
                 
                 valid_cprobs = cprobs.moveaxis(1, -1)[valid_mask]
                 
-                valid_labels = self.labels[valid_mask]
+                valid_labels = labels[valid_mask]
                 
                 hce_loss = loss.CCE(valid_cprobs, valid_labels, self.tree, self.steps)
                 
                 self.running_loss += hce_loss.item()
                 
-                self.clip_norms()
+                if self.steps % 25 == 0 and self.steps > 0:
+                    accuracy = self.acc_fn.compute().cpu().mean().item()
+                    miou = self.iou_fn.compute().cpu().mean().item()
+                    recall = self.recall_fn.compute().cpu().mean().item()
+                    print('[global step]  ', global_steps)
+                    print('[average loss] ', self.running_loss / (self.steps + 1))
+                    print('[accuracy]     ', accuracy)
+                    print('[miou]         ', miou)
+                    print('[recall]       ', recall)
+                
+                # self.clip_norms()
                 
                 hce_loss.backward()
                 
                 self.optimizer.step()
-                        
+                
+                self.optimizer.zero_grad()
+                
                 self.steps += 1
+                global_steps += 1
 
             self.steps = 0
             self.running_loss = 0.
             scheduler.step()
             
             # compute and print the metrics for the training data
-            if self.train_metrics:
+            if self.computing_metrics:
                 print('----------------[Training Metrics Epoch {}]----------------\n'.format(edx))
                 self.compute_metrics()
                 print('----------------[End Training Metrics Epoch {}]----------------\n'.format(edx))
@@ -166,8 +160,17 @@ class Segmenter(torch.nn.Module):
                 print('----------------[Validation Metrics Epoch {}]----------------\n'.format(edx))
                 self.compute_metrics_dataset(val_loader)
                 print('----------------[End Validation Metrics Epoch {}]----------------\n'.format(edx))
-                
-            
+    
+    
+    def metrics_step(self, cprobs, labels):           
+        with torch.no_grad():
+            joints = self.embedding_space.get_joints(cprobs)
+            preds = self.embedding_space.decide(joints)
+            iou = self.iou_fn.forward(preds, labels)
+            acc = self.acc_fn.forward(preds, labels)
+            rec = self.recall_fn(preds, labels)        
+
+    
     def compute_metrics(self):
         
         if self.config.dataset._NAME == 'pascal':
@@ -190,20 +193,17 @@ class Segmenter(torch.nn.Module):
 
         self.iou_fn.reset()
         self.acc_fn.reset()
+        self.recall_fn.reset()
     
     
     def compute_metrics_dataset(self, loader: torch.utils.data.DataLoader):
-        
         with torch.no_grad():
-            self.computing_metrics = True
-            
             for images, labels, _ in loader:
-                self.images = images.to(self.device)
-                self.labels = labels.to(self.device).squeeze()
-                self.data_forward()
-                
+                images = images.to(self.device)
+                labels = labels.to(self.device).squeeze()
+                cprobs = self.forward(images)
+                self.metrics_step(cprobs, labels)
             self.compute_metrics()
-            self.computing_metrics = False
 
 
     def print_metrics(self, metrics, ncls, i2c):
@@ -216,6 +216,9 @@ class Segmenter(torch.nn.Module):
         print('\n\n[recall per class]')
         self.pretty_print([(i2c[i], metrics['recall per class'][i].item()) for i in range(ncls) ])
         
+        print('[Average MIOU]      ', metrics['miou per class'].mean().item(), 
+            '\n[Average Accuracy]  ', metrics['acc per class'].mean().item(), 
+            '\n[Average Recall]    ', metrics['recall per class'].mean().item())
         
     def pretty_print(self, metrics_list):
         target = 15

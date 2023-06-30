@@ -88,7 +88,6 @@ def transforms(dataset, image: torch.Tensor, labels: torch.Tensor):
                 labels, top, left, int(0.5 * h), int(0.5 * w))
             
             
-            
             if random.random() > .5:
                 image = TF.hflip(image)
                 labels = TF.hflip(labels)
@@ -108,15 +107,6 @@ def transforms(dataset, image: torch.Tensor, labels: torch.Tensor):
             
         else:
             crop_h, crop_w = w, w
-            
-        center_h = int(h * 0.5)
-        center_w = int(w * 0.5)
-        
-        upper_h = center_h + int(0.5 * crop_h) - 1
-        lower_h = center_w - int(0.5 * crop_h) + 1
-        
-        upper_w = center_h + int(0.5 * crop_w) - 1
-        lower_w = center_w - int(0.5 * crop_w) + 1
         
         new_labels = torch.ones(crop_h, crop_w, dtype=labels.dtype) * 255
         new_image = torch.zeros(image.size(0), crop_h, crop_w, dtype=image.dtype)
@@ -137,20 +127,6 @@ def transforms(dataset, image: torch.Tensor, labels: torch.Tensor):
             antialias=False)
 
         labels = labels.squeeze()
-
-        labels = random_replace(
-            labels, 
-            value_to_replace=0,
-            p=0.9,
-            replacement_value=255)
-        
-        human_label = 15
-        if human_label in labels:
-            labels = random_replace(
-                labels,
-                value_to_replace=human_label,
-                p=0.3,
-                replacement_value=255)
         
         image = image - dataset.means.unsqueeze(-1).unsqueeze(-1)
 
@@ -329,6 +305,7 @@ def make_torch_loader(dataset, files, config, mode='val'):
     loader_args = {
         "batch_size": config.segmenter._BATCH_SIZE,
         "shuffle": True,
-        "drop_last": True}
+        "drop_last": True,
+        "pin_memory" : True}
     
     return torch.utils.data.DataLoader(dataset, **loader_args)

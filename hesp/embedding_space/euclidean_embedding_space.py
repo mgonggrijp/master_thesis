@@ -15,9 +15,10 @@ class EuclideanEmbeddingSpace(AbstractEmbeddingSpace):
         self.geometry = 'euclidean'
         # sanity check
         assert self.geometry == config.embedding_space._GEOMETRY, 'config geometry does not match embedding spaces'
+        self.curvature = torch.zeros(1,)
 
-    def project(self, embeddings):
+    def project(self, embeddings, curvature=0.0):
         return embeddings
 
-    def logits(self, embeddings: torch.tensor, offsets: torch.tensor, normals: torch.tensor):
+    def logits(self, embeddings: torch.tensor, offsets: torch.tensor, normals: torch.tensor, curvature=0.0):
         return torch_euc_mlr(embeddings, P_mlr=offsets, A_mlr=normals)

@@ -130,8 +130,8 @@ parser.add_argument(
 parser.add_argument(
     "--device",
     type=str,
-    default='cuda',
-    choices=['cpu', 'cuda'],
+    default='cuda:0',
+    choices=['cpu', 'cuda:0'],
     help="Which device to use."
 )
 
@@ -233,7 +233,6 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-# torch.set_default_device(args.device)
 
 if args.precision == '32':
     torch.set_default_dtype(torch.float32)
@@ -322,41 +321,35 @@ if args.mode == 'segmenter':
     val_loader = data_helpers.make_torch_loader(
         args.dataset, val_files, config, mode='val')
         
-    model = model_factory(config=config)
+    model = model_factory(config=config).to(args.device)
+    
     model.identifier = identifier
-
-    if config.segmenter._FREEZE_BN or args.freeze_bn:
-        for name, param in model.embedding_model.named_parameters():
-            if '.bn' in name:
-                param.requires_grad = False
-
-    learning_rate = args.slr if args.slr > 0 else config.dataset._INITIAL_LEARNING_RATE
-    iters = args.num_epochs if args.num_epochs else config.dataset._NUM_EPOCHS
-
-    optimizers = []
-    schedulers = []
-
-    # using the optimizer from geoopt that can work on manifold tensors
-    params = [  {'params' : model.embedding_space.offsets, 'lr' : args.slr},
-                {'params' : model.embedding_space.normals, 'lr' : args.slr},
-                {'params' : model.embedding_model.classifier.parameters(), 'lr' : args.slr}]
     
-    if not args.freeze_bb:
-        params.append( {'params' : model.embedding_model.backbone.parameters(), 'lr' : args.slr / 10} )
+    backbone_params = {"params" : model.embedding_model.backbone.parameters(), "lr" : 0.001}
+    classifier_params = {"params" : model.embedding_model.classifier.parameters(), "lr" : 0.01}
+    emb_space_params = {"params" : model.embedding_space.parameters(), "lr" : 0.01}
+    parameters = [backbone_params, classifier_params, emb_space_params]    
+
+    # optimizer = geoopt.optim.rsgd.RiemannianSGD(
+    #     parameters,
+    #     lr=args.slr,
+    #     momentum=config.segmenter._MOMENTUM,
+    #     weight_decay=config.segmenter._WEIGHT_DECAY,
+    #     stabilize=None)
     
-    optimizer = geoopt.optim.rsgd.RiemannianSGD(
-        params,
-        lr=learning_rate,
+    optimizer = torch.optim.SGD(
+        parameters,
+        lr=args.slr,
         momentum=config.segmenter._MOMENTUM,
-        weight_decay=config.segmenter._WEIGHT_DECAY,
-        stabilize=None)
+        weight_decay=config.segmenter._WEIGHT_DECAY)
 
     scheduler = torch.optim.lr_scheduler.PolynomialLR(
-        optimizer, total_iters=iters, power=0.9, last_epoch=-1, verbose=False)
+        optimizer, total_iters=args.num_epochs, power=0.9, last_epoch=-1, verbose=False)
     
     print("".join([arg + ' : ' + str(args.__dict__[arg]) + "\n" for arg in args.__dict__]))
     
-    
 # endregion model and data init
-    model.train(train_loader, val_loader, optimizer, scheduler)
+    # torch.set_default_device(args.device)
+    
+    model.train_fn(train_loader, val_loader, optimizer, scheduler)
 
