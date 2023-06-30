@@ -60,9 +60,7 @@ class AbstractEmbeddingSpace(ABC):
 
         # matmul with sibmat to compute the sums over siblings for the normalizer Z
         Z = torch.tensordot(
-            exp_logits,
-            self.tree.sibmat.to(self.device),
-            dims=[[1], [-1]])  # sh (batch, height, width, num_nodes)
+            exp_logits, self.tree.sibmat.to(self.device), dims=[[1], [-1]])  # sh (batch, height, width, num_nodes)
         
         # reshape back to (batch, num_nodes, height, width)
         Z_reshaped = torch.moveaxis(Z, -1, 1)  

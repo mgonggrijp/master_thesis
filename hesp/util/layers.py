@@ -51,6 +51,7 @@ def torch_hyp_mlr(inputs: torch.Tensor, c: torch.Tensor, P_mlr: torch.Tensor, A_
         c * xx, c * pp[None, :, None, None]) 
     
     
+    
     A_norm = torch.linalg.norm(A_mlr, dim=1)  
     
     normed_A = normalize(A_mlr, dim=1)

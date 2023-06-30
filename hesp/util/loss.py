@@ -6,9 +6,10 @@ EPS = torch.tensor(EPS, dtype=torch.float32)
 
 def CCE(cond_probs: torch.Tensor, labels: torch.Tensor, tree: Tree, steps) -> torch.Tensor:
         
-    log_probs = torch.log(torch.maximum(cond_probs, EPS)) 
-     
     hmat = tree.hmat.to(cond_probs.device)
+     
+    log_probs = torch.log(
+        torch.maximum(cond_probs, EPS)) 
      
     log_sum_p = log_probs @ hmat.T 
 
@@ -22,6 +23,7 @@ def CCE(cond_probs: torch.Tensor, labels: torch.Tensor, tree: Tree, steps) -> to
                 
     #     print('\n\n------------------------------------------------')
     
-    pos_logp = torch.gather(input=log_sum_p, index=labels[:, None], dim=1)
+    pos_logp = torch.gather(
+        input=log_sum_p, index=labels[:, None], dim=1)
 
     return -pos_logp.mean()

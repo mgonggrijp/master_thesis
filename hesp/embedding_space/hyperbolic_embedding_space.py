@@ -3,6 +3,7 @@ import os
 import numpy as np
 import torch
 
+
 from hesp.config.config import Config
 from hesp.embedding_space.abstract_embedding_space import AbstractEmbeddingSpace
 from hesp.hierarchy.tree import Tree
