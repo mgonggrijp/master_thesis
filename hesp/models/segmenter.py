@@ -92,17 +92,9 @@ class Segmenter(torch.nn.Module):
         
         class_weights = torch.load("datasets/pascal/class_weights.pt").to(self.device)
         
-        
         for edx in range(self.config.segmenter._NUM_EPOCHS):
             print('     [epoch]', edx)
             self.steps = 0
-            
-            if edx > warmup_epochs:
-                print('[learning rate]', scheduler.get_last_lr())
-                
-            else:
-                print('[learning rate]', warmup_scheduler.get_last_lr())
-            
             
             for images, labels, _ in train_loader:
                 labels = labels.to(self.device).squeeze()
@@ -123,59 +115,51 @@ class Segmenter(torch.nn.Module):
                 
                 self.running_loss += hce_loss.item()
                 
-                if self.steps % 50 == 0 and self.steps > 0:
-                    accuracy = self.acc_fn.compute().cpu().mean().item()
-                    miou = self.iou_fn.compute().cpu().mean().item()
-                    recall = self.recall_fn.compute().cpu().mean().item()
-                    print('[global step]  ', self.global_step)
-                    print('[average loss] ', self.running_loss / (self.steps + 1))
-                    print('[accuracy]     ', accuracy)
-                    print('[miou]         ', miou)
-                    print('[recall]       ', recall)
-                    
-                    if edx > warmup_epochs - 1:
-                        print('[learning rate]', scheduler.get_last_lr())
-                    
-                    else:
-                        print('[learning rate]', warmup_scheduler.get_last_lr())
+                # if self.steps % 50 == 0 and self.steps > 0:
+                #     accuracy = self.acc_fn.compute().cpu().mean().item()
+                #     miou = self.iou_fn.compute().cpu().mean().item()
+                #     recall = self.recall_fn.compute().cpu().mean().item()
+                #     print('[global step]  ', self.global_step)
+                #     print('[average loss] ', self.running_loss / (self.steps + 1))
+                #     print('[accuracy]     ', accuracy)
+                #     print('[miou]         ', miou)
+                #     print('[recall]       ', recall)
                         
-                    
-                
                 torch.nn.utils.clip_grad_norm_(
                     self.embedding_space.offsets,
                     self.config.segmenter._GRAD_CLIP)
-                
                 hce_loss.backward()
-                
                 self.optimizer.step()
-                
                 self.optimizer.zero_grad()
-                
                 self.steps += 1
                 self.global_step += 1
+
+            print(warmup_scheduler.get_last_lr())
 
             self.steps = 0
             self.running_loss = 0.
             
-            if edx > warmup_epochs - 1:
-                scheduler.step()
-                print('scheduler step')
+            if edx + 1 > warmup_epochs :
+                None
+                # scheduler.step()
+                # print('scheduler step')
+                
             else:
                 warmup_scheduler.step()
-                print('warmup scheduler step')
+                # print('warmup scheduler step')
             
             
             # compute and print the metrics for the training data
-            if self.computing_metrics:
-                print('----------------[Training Metrics Epoch {}]----------------\n'.format(edx))
-                self.compute_metrics()
-                print('----------------[End Training Metrics Epoch {}]----------------\n'.format(edx))
+            # if self.computing_metrics:
+                # print('----------------[Training Metrics Epoch {}]----------------\n'.format(edx))
+                # self.compute_metrics()
+                # print('----------------[End Training Metrics Epoch {}]----------------\n'.format(edx))
                 
             # compute and print the metrics for the validation data
-            if self.val_metrics:
-                print('----------------[Validation Metrics Epoch {}]----------------\n'.format(edx))
-                self.compute_metrics_dataset(val_loader)
-                print('----------------[End Validation Metrics Epoch {}]----------------\n'.format(edx))
+            # if self.val_metrics:
+                # print('----------------[Validation Metrics Epoch {}]----------------\n'.format(edx))
+                # self.compute_metrics_dataset(val_loader)
+                # print('----------------[End Validation Metrics Epoch {}]----------------\n'.format(edx))
     
     
     def metrics_step(self, cprobs, labels):           

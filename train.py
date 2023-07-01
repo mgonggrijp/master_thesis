@@ -286,10 +286,7 @@ if args.mode == 'segmenter':
     else:
         config.segmenter._NUM_EPOCHS = args.num_epochs
 
-    if not args.slr:
-        config.segmenter._INITIAL_LEARNING_RATE = config.dataset._INITIAL_LEARNING_RATE
-    else:
-        config.segmenter._INITIAL_LEARNING_RATE = args.slr
+    config.segmenter._INITIAL_LEARNING_RATE = args.slr
     config.segmenter._NUM_TRAIN = config.dataset._NUM_TRAIN
     config.segmenter._EFN_OUT_DIM = args.dim
 
@@ -325,9 +322,9 @@ if args.mode == 'segmenter':
     
     model.identifier = identifier
     
-    backbone_params = {"params" : model.embedding_model.backbone.parameters(), "lr" : 0.001}
-    classifier_params = {"params" : model.embedding_model.classifier.parameters(), "lr" : 0.01}
-    emb_space_params = {"params" : model.embedding_space.parameters(), "lr" : 0.01}
+    backbone_params = {"params" : model.embedding_model.backbone.parameters(), "lr" : args.slr/10}
+    classifier_params = {"params" : model.embedding_model.classifier.parameters(), "lr" : args.slr}
+    emb_space_params = {"params" : model.embedding_space.parameters(), "lr" : args.slr}
     parameters = [backbone_params, classifier_params, emb_space_params]    
 
     optimizer = geoopt.optim.RiemannianAdam(
@@ -348,10 +345,13 @@ if args.mode == 'segmenter':
     
     warmup_epochs = 5
     
-    warmup_lr_lambda = lambda epoch:  (1 / (warmup_epochs + 1)**2) * (epoch + 1)**2
+    start = 1 / 10
+    final = 1
     
     warmup_scheduler = torch.optim.lr_scheduler.LambdaLR(
-        optimizer, lr_lambda=warmup_lr_lambda)
+        optimizer,
+        lambda epoch: (epoch + 1) * ((final - start) / warmup_epochs),
+        last_epoch=warmup_epochs)
     
     print("".join([arg + ' : ' + str(args.__dict__[arg]) + "\n" for arg in args.__dict__]))
     
