@@ -118,7 +118,7 @@ class Segmenter(torch.nn.Module):
                 
                 self.running_loss += hce_loss.item()
                 
-                if self.steps % 2 == 0 and self.steps > 0:
+                if self.steps % 50 == 0 and self.steps > 0:
                     accuracy = self.acc_fn.compute().cpu().mean().item()
                     miou = self.iou_fn.compute().cpu().mean().item()
                     recall = self.recall_fn.compute().cpu().mean().item()

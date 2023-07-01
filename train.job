@@ -4,9 +4,10 @@
 #SBATCH --cpus-per-task=18
 #SBATCH --gpus=1
 #SBATCH --partition=gpu
-#SBATCH --time=00:30:00
-#SBATCH --output=master_thesis/test.txt
-#SBATCH --name=test
+#SBATCH --time=06:00:00
+#SBATCH --output=/home/mgonggri/master_thesis/output_files/test_run.txt
 
- 
-srun master_thesis/python train.py --geometry euclidean --dim 10 --num_epochs 2 > test.txt
+source activate hyperbolic
+
+srun python /home/mgonggri/master_thesis/train.py \
+ --geometry hyperbolic --dim 10 --num_epochs 15 --precision 64
