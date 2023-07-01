@@ -17,7 +17,7 @@ import torchvision.transforms.functional as TF
 import matplotlib.pyplot as plt
 
 # change depending on where the folder is located
-PASCAL_ROOT = "datasets/pascal/data/VOCdevkit/VOC2012/"
+PASCAL_ROOT = "datasets/pascal/data/"
 COCO_ROOT = "datasets/coco/data/"
 
 def imshow(images, labels):
@@ -46,7 +46,6 @@ def random_replace(labels, value_to_replace, p, replacement_value=255):
     labels[rows_subset, cols_subset] = replacement_value
     
     return labels
-        
 
 
 def transforms(dataset, image: torch.Tensor, labels: torch.Tensor):
