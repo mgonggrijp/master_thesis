@@ -90,6 +90,9 @@ class Segmenter(torch.nn.Module):
         self.global_step = 0
         torch.set_printoptions(sci_mode=False)
         
+        class_weights = torch.load("datasets/pascal/class_weights.pt").to(self.device)
+        
+        
         for edx in range(self.config.segmenter._NUM_EPOCHS):
             print('     [epoch]', edx)
             self.steps = 0
@@ -116,7 +119,7 @@ class Segmenter(torch.nn.Module):
                 
                 valid_labels = labels[valid_mask]
                 
-                hce_loss = loss.CCE(valid_cprobs, valid_labels, self.tree, self.steps)
+                hce_loss = loss.CCE(valid_cprobs, valid_labels, self.tree, class_weights)
                 
                 self.running_loss += hce_loss.item()
                 

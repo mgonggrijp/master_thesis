@@ -10,6 +10,8 @@ def CCE(
     tree: Tree,
     class_weights: torch.Tensor) -> torch.Tensor:
     
+    print(class_weights)
+    
     hmat = tree.hmat.to(cond_probs.device)
      
     log_probs = torch.log(
@@ -18,6 +20,8 @@ def CCE(
     log_sum_p = log_probs @ hmat.T 
     
     pos_logp = torch.gather(
-        input=log_sum_p, index=labels[:, None], dim=1) * class_weights[labels]
+        input=log_sum_p, index=labels[:, None], dim=1).squeeze()
+
+    pos_logp *= class_weights[labels]    
 
     return -pos_logp.mean()
