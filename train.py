@@ -350,7 +350,6 @@ if args.mode == 'segmenter':
     
     warmup_scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer,
-        lambda epoch: (epoch + 1) * ((final - start) / warmup_epochs),
         last_epoch=warmup_epochs)
     
     print("".join([arg + ' : ' + str(args.__dict__[arg]) + "\n" for arg in args.__dict__]))
