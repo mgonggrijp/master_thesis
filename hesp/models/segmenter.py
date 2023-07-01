@@ -88,6 +88,8 @@ class Segmenter(torch.nn.Module):
         
         self.running_loss = 0.
         self.global_step = 0
+        torch.set_printoptions(sci_mode=False)
+        
         for edx in range(self.config.segmenter._NUM_EPOCHS):
             print('     [epoch]', edx)
             self.steps = 0
@@ -127,7 +129,13 @@ class Segmenter(torch.nn.Module):
                     print('[accuracy]     ', accuracy)
                     print('[miou]         ', miou)
                     print('[recall]       ', recall)
-                    print('[learning rate]', optimizer)
+                    
+                    if edx > warmup_epochs - 1:
+                        print('[learning rate]', scheduler.get_last_lr())
+                    
+                    else:
+                        print('[learning rate]', warmup_scheduler.get_last_lr())
+                        
                     
                 
                 torch.nn.utils.clip_grad_norm_(
