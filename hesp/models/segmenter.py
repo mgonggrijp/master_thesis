@@ -73,7 +73,7 @@ class Segmenter(torch.nn.Module):
         return cprobs
 
             
-    def train_fn(self, train_loader, val_loader, optimizer, scheduler, warmup_scheduler, warmup_epochs):
+    def train_fn(self, train_loader, val_loader, optimizer, scheduler, warmup_epochs):
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.computing_metrics = True
@@ -86,6 +86,11 @@ class Segmenter(torch.nn.Module):
 
         print('training..')
         
+        init_lrs = []
+        for param_group in optimizer.param_groups:
+            init_lrs.append( param_group['lr'])
+        print(init_lrs)
+        
         self.running_loss = 0.
         self.global_step = 0
         torch.set_printoptions(sci_mode=False)
@@ -95,6 +100,12 @@ class Segmenter(torch.nn.Module):
         for edx in range(self.config.segmenter._NUM_EPOCHS):
             print('     [epoch]', edx)
             self.steps = 0
+            
+            # warmup schedule
+            if edx + 1 <= warmup_epochs: 
+                for i, param_group in enumerate(optimizer.param_groups):
+                        param_group['lr'] = init_lrs[i] * (edx + 1) / warmup_epochs
+                        print(param_group['lr'])
             
             for images, labels, _ in train_loader:
                 labels = labels.to(self.device).squeeze()
@@ -134,32 +145,30 @@ class Segmenter(torch.nn.Module):
                 self.steps += 1
                 self.global_step += 1
 
-            print(warmup_scheduler.get_last_lr())
 
             self.steps = 0
             self.running_loss = 0.
             
-            if edx + 1 > warmup_epochs :
-                None
-                # scheduler.step()
-                # print('scheduler step')
+            if edx + 1 >= warmup_epochs:
+                print(edx, 'schedule step')
                 
-            else:
-                warmup_scheduler.step()
-                # print('warmup scheduler step')
+                for i, param_group in enumerate(optimizer.param_groups):
+                        print(param_group['lr'])
+                        
+                scheduler.step()
             
             
             # compute and print the metrics for the training data
-            # if self.computing_metrics:
-                # print('----------------[Training Metrics Epoch {}]----------------\n'.format(edx))
-                # self.compute_metrics()
-                # print('----------------[End Training Metrics Epoch {}]----------------\n'.format(edx))
+            if self.computing_metrics:
+                print('----------------[Training Metrics Epoch {}]----------------\n'.format(edx))
+                self.compute_metrics()
+                print('----------------[End Training Metrics Epoch {}]----------------\n'.format(edx))
                 
             # compute and print the metrics for the validation data
-            # if self.val_metrics:
-                # print('----------------[Validation Metrics Epoch {}]----------------\n'.format(edx))
-                # self.compute_metrics_dataset(val_loader)
-                # print('----------------[End Validation Metrics Epoch {}]----------------\n'.format(edx))
+            if self.val_metrics:
+                print('----------------[Validation Metrics Epoch {}]----------------\n'.format(edx))
+                self.compute_metrics_dataset(val_loader)
+                print('----------------[End Validation Metrics Epoch {}]----------------\n'.format(edx))
     
     
     def metrics_step(self, cprobs, labels):           

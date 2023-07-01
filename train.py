@@ -333,28 +333,15 @@ if args.mode == 'segmenter':
         # momentum=config.segmenter._MOMENTUM,
         weight_decay=config.segmenter._WEIGHT_DECAY,
         stabilize=1)
-    
-    # optimizer = torch.optim.SGD(
-    #     parameters,
-    #     lr=args.slr,
-    #     momentum=config.segmenter._MOMENTUM,
-    #     weight_decay=config.segmenter._WEIGHT_DECAY)
 
     scheduler = torch.optim.lr_scheduler.PolynomialLR(
         optimizer, total_iters=args.num_epochs, power=0.9, last_epoch=-1, verbose=False)
     
     warmup_epochs = 5
     
-    start = 1 / 10
-    final = 1
-    
-    warmup_scheduler = torch.optim.lr_scheduler.LambdaLR(
-        optimizer,
-        last_epoch=warmup_epochs)
-    
     print("".join([arg + ' : ' + str(args.__dict__[arg]) + "\n" for arg in args.__dict__]))
     
 # endregion model and data init
     # torch.set_default_device(args.device)
-    model.train_fn(train_loader, val_loader, optimizer, scheduler, warmup_scheduler, warmup_epochs)
+    model.train_fn(train_loader, val_loader, optimizer, scheduler, warmup_epochs)
 
