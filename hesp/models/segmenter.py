@@ -46,25 +46,10 @@ class Segmenter(torch.nn.Module):
                 self.save_folder + "offsets.pt").to(self.device)
             
         self.iou_fn = torchmetrics.classification.MulticlassJaccardIndex(
-            config.dataset._NUM_CLASSES,
-            average=None,
-            ignore_index=255,
-            validate_args=False)
+            config.dataset._NUM_CLASSES, average=None, ignore_index=255, validate_args=False)
         
         self.acc_fn = torchmetrics.classification.MulticlassAccuracy(
-            config.dataset._NUM_CLASSES,
-            average=None, 
-            multidim_average='global',
-            ignore_index=255,
-            validate_args=False)
-        
-        self.recall_fn = torchmetrics.classification.MulticlassRecall(
-            config.dataset._NUM_CLASSES,
-            top_k=1,
-            average=None,
-            multidim_average='global',
-            ignore_index=255,
-            validate_args=False)
+            config.dataset._NUM_CLASSES, average=None,  multidim_average='global', ignore_index=255, validate_args=False)
         
     
     def forward(self, images):
@@ -75,6 +60,8 @@ class Segmenter(torch.nn.Module):
         
         max_sample_norms = norms.amax(dim=(1, 2)) # sh (b, )
         
+        # normalize by the maximum norm in the same image and rescale by 
+        # the radius of the PCB s.t. the maximum norm is equal to this radius.
         normalized = embs / max_sample_norms[:, None, None, None]  * \
                     torch.sqrt(self.embedding_space.curvature)**-1 # sh (b, d, h, w)
                          
@@ -138,12 +125,10 @@ class Segmenter(torch.nn.Module):
                     with torch.no_grad():
                         accuracy = self.acc_fn.compute().cpu().mean().item()
                         miou = self.iou_fn.compute().cpu().mean().item()
-                        recall = self.recall_fn.compute().cpu().mean().item()
                         print('[global step]         ', round(self.global_step, 4))
                         print('[average loss]        ', round(self.running_loss / (self.steps + 1), 4))
                         print('[accuracy]            ', round(accuracy, 4))
                         print('[miou]                ', round(miou, 4))
-                        print('[recall]              ', round(recall, 4))
                         
                         offset_norms_0 = torch.linalg.vector_norm(self.embedding_space.offsets, dim=0).mean().item()
                         offset_norms_1 = torch.linalg.vector_norm(self.embedding_space.offsets, dim=1).mean().item()
@@ -183,6 +168,8 @@ class Segmenter(torch.nn.Module):
                 self.compute_metrics_dataset(val_loader)
                 print('----------------[End Validation Metrics Epoch {}]----------------\n'.format(edx))
     
+        print('Training done. Saving final model state..')
+        torch.save(self.state_dict(), self.config.segmenter._SAVE_FOLDER + 'segmenter_state.pt')
     
     def metrics_step(self, cprobs, labels):           
         with torch.no_grad():
@@ -190,7 +177,6 @@ class Segmenter(torch.nn.Module):
             preds = self.embedding_space.decide(joints)
             iou = self.iou_fn.forward(preds, labels)
             acc = self.acc_fn.forward(preds, labels)
-            rec = self.recall_fn(preds, labels)        
 
     
     def compute_metrics(self):
@@ -203,11 +189,9 @@ class Segmenter(torch.nn.Module):
         
         accuracy = self.acc_fn.compute().cpu()
         miou = self.iou_fn.compute().cpu()
-        recall = self.recall_fn.compute().cpu()
         
         metrics = {'acc per class' : accuracy,
-                   'miou per class' : miou,
-                   'recall per class' : recall}
+                   'miou per class' : miou}
         
         ncls = accuracy.size(0)
         
@@ -215,7 +199,6 @@ class Segmenter(torch.nn.Module):
 
         self.iou_fn.reset()
         self.acc_fn.reset()
-        self.recall_fn.reset()
     
     
     def compute_metrics_dataset(self, loader: torch.utils.data.DataLoader):
@@ -235,13 +218,9 @@ class Segmenter(torch.nn.Module):
         print('\n\n[miou per class]')
         self.pretty_print([(i2c[i], metrics['miou per class'][i].item()) for i in range(ncls) ])
         
-        print('\n\n[recall per class]')
-        self.pretty_print([(i2c[i], metrics['recall per class'][i].item()) for i in range(ncls) ])
-        
         print('\n\n[Global Step]       ', self.global_step,
                 '\n[Average MIOU]      ', metrics['miou per class'].mean().item(), 
-                '\n[Average Accuracy]  ', metrics['acc per class'].mean().item(), 
-                '\n[Average Recall]    ', metrics['recall per class'].mean().item())
+                '\n[Average Accuracy]  ', metrics['acc per class'].mean().item()) 
         
     def pretty_print(self, metrics_list):
         target = 15

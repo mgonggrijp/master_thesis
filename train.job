@@ -4,13 +4,12 @@
 #SBATCH --cpus-per-task=18
 #SBATCH --gpus=1
 #SBATCH --partition=gpu
-#SBATCH --time=06:00:00
+#SBATCH --time=15:00:00
 #SBATCH --output=/home/mgonggri/master_thesis/output_files/TESTING.txt
 #SBATCH --job-name=test
 
-
 # [data_limit]  [geometry]  [dim]  [c]  [flat]  [batch_size]  [num_epochs]  [slr]  [precision] [warmup_epochs]
   
-
 source activate hyperbolic
-srun python /home/mgonggri/master_thesis/train.py --num_epochs 50 --c 0.2 --batch_size 3 --slr 0.0001 --warmup_epochs 1
+srun python /home/mgonggri/master_thesis/train.py \
+ --num_epochs 100 --c 0.2 --batch_size 5 --slr 0.001 --warmup_epochs 5
