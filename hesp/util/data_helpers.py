@@ -164,17 +164,17 @@ class PascalDataset(torch.utils.data.Dataset):
             
             self.data.append([image, labels, torch.tensor(index, dtype=torch.long,)])
 
+
     def __len__(self, ):
         return len(self.data)
+
 
     def __getitem__(self, idx):
         image, labels, index = self.data[idx]
 
         if self.use_transforms:
             image, labels = self.transforms(
-                self,
-                image=image,
-                labels=labels.squeeze())
+                self, image=image, labels=labels.squeeze())
 
         return image, labels, index
 

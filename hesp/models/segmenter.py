@@ -68,8 +68,18 @@ class Segmenter(torch.nn.Module):
         
     
     def forward(self, images):
-        embs = self.embedding_model(images)
-        cprobs = self.embedding_space(embs, self.steps)        
+        
+        embs = self.embedding_model(images) # sh (b, d, h, w)
+        
+        norms = torch.linalg.vector_norm(embs, dim=1) # sh (b, h, w)
+        
+        max_sample_norms = norms.amax(dim=(1, 2)) # sh (b, )
+        
+        normalized = embs / max_sample_norms[:, None, None, None]  * \
+                    torch.sqrt(self.embedding_space.curvature)**-1 # sh (b, d, h, w)
+                         
+        cprobs = self.embedding_space(normalized, self.steps) # sh (b, c, h, w)
+        
         return cprobs
 
             
@@ -143,8 +153,8 @@ class Segmenter(torch.nn.Module):
                         
                         print('[offset norms dim 0] ', round(offset_norms_0, 8) )
                         print('[offset norms dim 1] ', round(offset_norms_1, 8) )
-                        print('[normal norm dim 0] ', round(normal_norms_0, 8),  )
-                        print('[normal norm dim 1] ', round(normal_norms_1, 8),  '\n\n')
+                        print('[normal norm dim 0]  ', round(normal_norms_0, 8),  )
+                        print('[normal norm dim 1]  ', round(normal_norms_1, 8),  '\n\n')
                     
                     
                 torch.nn.utils.clip_grad_norm_(
