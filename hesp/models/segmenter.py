@@ -8,6 +8,7 @@ from hesp.models.DeepLabV3Plus_Pytorch import network
 import torchmetrics
 import random
 from hesp.util.data_helpers import imshow
+import os
 
 
 class Segmenter(torch.nn.Module):
@@ -169,7 +170,10 @@ class Segmenter(torch.nn.Module):
                 print('----------------[End Validation Metrics Epoch {}]----------------\n'.format(edx))
     
         print('Training done. Saving final model state..')
-        torch.save(self.state_dict(), self.config.segmenter._SAVE_FOLDER + 'segmenter_state.pt')
+        folder =  self.config.segmenter._SAVE_FOLDER 
+        if not os.path.exists(folder):
+            os.mkdir(folder)
+        torch.save(self.state_dict(), folder + 'segmenter_state.pt' )
     
     def metrics_step(self, cprobs, labels):           
         with torch.no_grad():

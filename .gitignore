@@ -170,6 +170,10 @@ deeplab.py
 
 .zip
 
+.pt
+
+saves/
+
 Annotations/
 ImageSets/
 JPEGImages/
