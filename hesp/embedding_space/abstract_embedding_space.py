@@ -25,14 +25,10 @@ class AbstractEmbeddingSpace(torch.nn.Module):
             size=[self.tree.M, self.dim], fill_value=0.05)
         
         std_offsets = torch.full(
-            size=[self.tree.M, self.dim], fill_value=0.01)
+            size=[self.tree.M, self.dim], fill_value=0.001)
         
         self.normals = torch.nn.Parameter(
             torch.normal(0.0, std_normals),
-            requires_grad=True)
-
-        self.offsets = torch.nn.Parameter(
-            torch.normal(0.0, std_offsets),
             requires_grad=True)
         
         if config.embedding_space._GEOMETRY == 'hyperbolic':
@@ -40,14 +36,19 @@ class AbstractEmbeddingSpace(torch.nn.Module):
             pcb = geoopt.manifolds.PoincareBall(
                 c=config.embedding_space._INIT_CURVATURE)
             
-            print('[curvature]',
-                  config.embedding_space._INIT_CURVATURE)
+            print('[curvature]', config.embedding_space._INIT_CURVATURE)
             
             self.offsets = geoopt.ManifoldParameter(
-                            self.offsets, manifold=pcb, requires_grad=True)
+                            torch.normal(0.0, std_offsets),
+                            manifold=pcb,
+                            requires_grad=True)
+            
+        else:
+            self.offsets = torch.nn.Parameter(
+                torch.normal(0.0, std_offsets), requires_grad=True)
             
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor, steps):
         """ Given a set of vectors embedded in Euclidean space,
             compute the conditional probabilities for each of these. 
             
@@ -60,6 +61,11 @@ class AbstractEmbeddingSpace(torch.nn.Module):
         
         # embed the vectors in poincareball
         x = self.project(x)
+        
+        if steps % 50 == 0:
+            with torch.no_grad():
+                print('[embedding norms]',
+                    torch.linalg.vector_norm(x, dim=1).mean().item() )
         
         # compute the conditional probabilities
         x = self.run(x)

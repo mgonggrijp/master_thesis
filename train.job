@@ -13,5 +13,4 @@
   
 
 source activate hyperbolic
-srun python /home/mgonggri/master_thesis/train.py \
- --num_epochs 50 --c 0.2 --batch_size 3 --slr 0.0001 --warmup_epochs 1
+srun python /home/mgonggri/master_thesis/train.py --num_epochs 50 --c 0.2 --batch_size 3 --slr 0.0001 --warmup_epochs 1

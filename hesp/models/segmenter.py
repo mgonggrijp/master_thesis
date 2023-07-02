@@ -69,7 +69,7 @@ class Segmenter(torch.nn.Module):
     
     def forward(self, images):
         embs = self.embedding_model(images)
-        cprobs = self.embedding_space(embs)        
+        cprobs = self.embedding_space(embs, self.steps)        
         return cprobs
 
             
@@ -125,18 +125,30 @@ class Segmenter(torch.nn.Module):
                 self.running_loss += hce_loss.item()
                 
                 if self.steps % 50 == 0 and self.steps > 0:
-                    accuracy = self.acc_fn.compute().cpu().mean().item()
-                    miou = self.iou_fn.compute().cpu().mean().item()
-                    recall = self.recall_fn.compute().cpu().mean().item()
-                    print('[global step]  ', round(self.global_step, 4))
-                    print('[average loss] ', round(self.running_loss / (self.steps + 1), 4))
-                    print('[accuracy]     ', round(accuracy, 4))
-                    print('[miou]         ', round(miou, 4))
-                    print('[recall]       ', round(recall, 4))
+                    with torch.no_grad():
+                        accuracy = self.acc_fn.compute().cpu().mean().item()
+                        miou = self.iou_fn.compute().cpu().mean().item()
+                        recall = self.recall_fn.compute().cpu().mean().item()
+                        print('[global step]         ', round(self.global_step, 4))
+                        print('[average loss]        ', round(self.running_loss / (self.steps + 1), 4))
+                        print('[accuracy]            ', round(accuracy, 4))
+                        print('[miou]                ', round(miou, 4))
+                        print('[recall]              ', round(recall, 4))
                         
+                        offset_norms_0 = torch.linalg.vector_norm(self.embedding_space.offsets, dim=0).mean().item()
+                        offset_norms_1 = torch.linalg.vector_norm(self.embedding_space.offsets, dim=1).mean().item()
+                        
+                        normal_norms_0 = torch.linalg.vector_norm(self.embedding_space.normals, dim=0).mean().item()
+                        normal_norms_1 = torch.linalg.vector_norm(self.embedding_space.normals, dim=1).mean().item()
+                        
+                        print('[offset norms dim 0] ', round(offset_norms_0, 8) )
+                        print('[offset norms dim 1] ', round(offset_norms_1, 8) )
+                        print('[normal norm dim 0] ', round(normal_norms_0, 8),  )
+                        print('[normal norm dim 1] ', round(normal_norms_1, 8),  '\n\n')
+                    
+                    
                 torch.nn.utils.clip_grad_norm_(
-                    self.embedding_space.offsets,
-                    self.config.segmenter._GRAD_CLIP)
+                    self.embedding_space.offsets, self.config.segmenter._GRAD_CLIP)
                 hce_loss.backward()
                 self.optimizer.step()
                 self.optimizer.zero_grad()
