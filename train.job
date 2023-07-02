@@ -9,9 +9,9 @@
 #SBATCH --job-name=test
 
 
-# [data_limit]  [geometry]  [dim]  [c]  [flat]  [batch_size]  [num_epochs]  [slr]  [precision]
+# [data_limit]  [geometry]  [dim]  [c]  [flat]  [batch_size]  [num_epochs]  [slr]  [precision] [warmup_epochs]
   
 
 source activate hyperbolic
 srun python /home/mgonggri/master_thesis/train.py \
- --num_epochs 50 --c 0.2 --batch_size 3 --slr 0.0001
+ --num_epochs 50 --c 0.2 --batch_size 3 --slr 0.0001 --warmup_epochs 1

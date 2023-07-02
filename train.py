@@ -33,11 +33,20 @@ parser.add_argument(
     help='Wether or not to record the metrics for the training data during training.'
 )
 
+
 parser.add_argument(
     '--data_limit',
     default=-1,
     type=int,
     help='Maxmimum number of samples that can be used. For memory preservation.'
+)
+
+parser.add_argument(
+    '--warmup_epochs',
+    default=5,
+    type=int,
+    help="The number of warmup epochs. \
+         Linearly increases warmup from [1 / warmup_epochs * slr] to [slr]. "
 )
 
 
@@ -317,8 +326,6 @@ if args.mode == 'segmenter':
     print("[number of training samples]    ", len(train_files),
         "\n[number of validation samples]  ", len(val_files) )
     
-    exit()
-    
     train_loader = data_helpers.make_torch_loader(
         args.dataset, train_files, config, mode='train')
     
@@ -344,11 +351,9 @@ if args.mode == 'segmenter':
     scheduler = torch.optim.lr_scheduler.PolynomialLR(
         optimizer, total_iters=args.num_epochs, power=0.9, last_epoch=-1, verbose=False)
     
-    warmup_epochs = 5
-    
     print("".join([arg + ' : ' + str(args.__dict__[arg]) + "\n" for arg in args.__dict__]))
     
 # endregion model and data init
-    # torch.set_default_device(args.device)
-    model.train_fn(train_loader, val_loader, optimizer, scheduler, warmup_epochs)
+    print('[Training...]')
+    model.train_fn(train_loader, val_loader, optimizer, scheduler, args.warmup_epochs)
 

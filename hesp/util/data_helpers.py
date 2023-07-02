@@ -65,16 +65,10 @@ def transforms(dataset, image: torch.Tensor, labels: torch.Tensor):
             new_size = [int(rescale_factor * h), int(rescale_factor * w)]
             
             image = TF.resize(
-                image,
-                new_size,
-                torchvision.transforms.InterpolationMode.BILINEAR,
-                antialias=True)
+                image, new_size, torchvision.transforms.InterpolationMode.BILINEAR, antialias=True)
             
             labels = TF.resize(
-                labels.unsqueeze(0),
-                new_size,
-                torchvision.transforms.InterpolationMode.NEAREST,
-                antialias=False)
+                labels.unsqueeze(0), new_size, torchvision.transforms.InterpolationMode.NEAREST, antialias=False)
             
             _, h, w = image.shape
             top  = random.randint(0, int(0.5 * h)) # uniform offset
@@ -86,12 +80,10 @@ def transforms(dataset, image: torch.Tensor, labels: torch.Tensor):
             labels = TF.crop(
                 labels, top, left, int(0.5 * h), int(0.5 * w))
             
-            
             if random.random() > .5:
                 image = TF.hflip(image)
                 labels = TF.hflip(labels)
                 
-
             image = torchvision.transforms.functional.adjust_brightness(
                 image,
                 random.uniform(0.8, 1.2))
@@ -114,16 +106,10 @@ def transforms(dataset, image: torch.Tensor, labels: torch.Tensor):
         new_image[:, :h, :w] = image
         
         image = TF.resize(
-            new_image,
-            dataset.output_size,
-            torchvision.transforms.InterpolationMode.BILINEAR,
-            antialias=True)
+            new_image,dataset.output_size,torchvision.transforms.InterpolationMode.BILINEAR,antialias=True)
         
         labels = TF.resize(
-            new_labels.unsqueeze(0),
-            dataset.output_size,
-            torchvision.transforms.InterpolationMode.NEAREST,
-            antialias=False)
+            new_labels.unsqueeze(0), dataset.output_size, torchvision.transforms.InterpolationMode.NEAREST, antialias=False)
 
         labels = labels.squeeze()
         
@@ -170,7 +156,7 @@ class PascalDataset(torch.utils.data.Dataset):
             random.shuffle(files)
 
         for index, file in enumerate(files):
-            labels = PIL.Image.open(PASCAL_ROOT + "SegmentationClass/" + file + ".png", formats=["PNG"])
+            labels = PIL.Image.open(PASCAL_ROOT + "SegmentationClassAug/" + file + ".png", formats=["PNG"])
             labels = torch.tensor(np.asarray(labels)).to(torch.long)
 
             image = PIL.Image.open(PASCAL_ROOT + "JPEGImages/" + file + ".jpg", formats=["JPEG"])

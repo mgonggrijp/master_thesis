@@ -80,12 +80,10 @@ class Segmenter(torch.nn.Module):
         self.train()
         
         if type(self.seed) == float:
-            print('random seed', self.seed)
+            print('[random seed]  ', self.seed)
             torch.manual_seed(self.seed)
             random.seed(self.seed)
 
-        print('training..')
-        
         init_lrs = []
         for param_group in optimizer.param_groups:
             init_lrs.append( param_group['lr'])
