@@ -172,6 +172,7 @@ Annotations/
 ImageSets/
 JPEGImages/
 SegmentationClass/
+SegmentationClassAug/
 SegmentationObject/
 VOCdevkit/
 VOC2012/
