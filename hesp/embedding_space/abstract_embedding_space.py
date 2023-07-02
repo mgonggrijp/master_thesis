@@ -28,7 +28,8 @@ class AbstractEmbeddingSpace(torch.nn.Module):
             size=[self.tree.M, self.dim], fill_value=0.01)
         
         self.normals = torch.nn.Parameter(
-            torch.normal(0.0, std_normals), requires_grad=True)
+            torch.normal(0.0, std_normals),
+            requires_grad=True)
 
         self.offsets = torch.nn.Parameter(
             torch.normal(0.0, std_offsets),
@@ -39,18 +40,31 @@ class AbstractEmbeddingSpace(torch.nn.Module):
             pcb = geoopt.manifolds.PoincareBall(
                 c=config.embedding_space._INIT_CURVATURE)
             
+            print('[curvature]',
+                  config.embedding_space._INIT_CURVATURE)
+            
             self.offsets = geoopt.ManifoldParameter(
                             self.offsets, manifold=pcb, requires_grad=True)
             
 
-    def forward(self, embeddings: torch.Tensor):
-        """ Takes in a set of embeddings and computes their class probabilities. """
+    def forward(self, x: torch.Tensor):
+        """ Given a set of vectors embedded in Euclidean space,
+            compute the conditional probabilities for each of these. 
+            
+            args:
+                x: sh (batch, dim, height, width) set of dim sized vectors
+                
+            returns
+                cprobs: sh (batch, nclasses, height, width) conditional probability
+                        for each class given each embedding. """
         
-        proj_embs = self.project(embeddings)
+        # embed the vectors in poincareball
+        x = self.project(x)
         
-        cprobs = self.run(proj_embs)
+        # compute the conditional probabilities
+        x = self.run(x)
         
-        return cprobs
+        return x
         
 
     def softmax(self, logits):

@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 torch.set_printoptions(threshold=float('inf'))
 torch.set_printoptions(sci_mode=False)
 
+print('Initializing..')
+
 # region argparse
 parser = argparse.ArgumentParser(
     description="Train models."

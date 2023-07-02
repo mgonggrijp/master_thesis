@@ -105,7 +105,7 @@ class Segmenter(torch.nn.Module):
             if edx + 1 <= warmup_epochs: 
                 for i, param_group in enumerate(optimizer.param_groups):
                         param_group['lr'] = init_lrs[i] * (edx + 1) / warmup_epochs
-                        print(param_group['lr'])
+                        print('[new learning rate]', param_group['lr'])
             
             for images, labels, _ in train_loader:
                 labels = labels.to(self.device).squeeze()
@@ -126,15 +126,15 @@ class Segmenter(torch.nn.Module):
                 
                 self.running_loss += hce_loss.item()
                 
-                # if self.steps % 50 == 0 and self.steps > 0:
-                #     accuracy = self.acc_fn.compute().cpu().mean().item()
-                #     miou = self.iou_fn.compute().cpu().mean().item()
-                #     recall = self.recall_fn.compute().cpu().mean().item()
-                #     print('[global step]  ', self.global_step)
-                #     print('[average loss] ', self.running_loss / (self.steps + 1))
-                #     print('[accuracy]     ', accuracy)
-                #     print('[miou]         ', miou)
-                #     print('[recall]       ', recall)
+                if self.steps % 50 == 0 and self.steps > 0:
+                    accuracy = self.acc_fn.compute().cpu().mean().item()
+                    miou = self.iou_fn.compute().cpu().mean().item()
+                    recall = self.recall_fn.compute().cpu().mean().item()
+                    print('[global step]  ', round(self.global_step, 4))
+                    print('[average loss] ', round(self.running_loss / (self.steps + 1), 4))
+                    print('[accuracy]     ', round(accuracy, 4))
+                    print('[miou]         ', round(miou, 4))
+                    print('[recall]       ', round(recall, 4))
                         
                 torch.nn.utils.clip_grad_norm_(
                     self.embedding_space.offsets,
@@ -145,26 +145,19 @@ class Segmenter(torch.nn.Module):
                 self.steps += 1
                 self.global_step += 1
 
-
             self.steps = 0
             self.running_loss = 0.
             
             if edx + 1 >= warmup_epochs:
-                print(edx, 'schedule step')
-                
-                for i, param_group in enumerate(optimizer.param_groups):
-                        print(param_group['lr'])
-                        
                 scheduler.step()
+                print('[new learning rate epoch {}]'.format(edx),
+                      scheduler.get_last_lr())
             
-            
-            # compute and print the metrics for the training data
             if self.computing_metrics:
                 print('----------------[Training Metrics Epoch {}]----------------\n'.format(edx))
                 self.compute_metrics()
                 print('----------------[End Training Metrics Epoch {}]----------------\n'.format(edx))
                 
-            # compute and print the metrics for the validation data
             if self.val_metrics:
                 print('----------------[Validation Metrics Epoch {}]----------------\n'.format(edx))
                 self.compute_metrics_dataset(val_loader)

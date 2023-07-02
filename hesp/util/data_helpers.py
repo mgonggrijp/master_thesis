@@ -263,7 +263,7 @@ def make_data_splits(data_name, limit, split, shuffle = False):
     file split based on the given split value. Used for Pascal only. """
 
     if data_name == 'pascal':
-        files = [x.split('.')[0] for x in os.listdir(PASCAL_ROOT + "SegmentationClass")]
+        files = [x.split('.')[0] for x in os.listdir(PASCAL_ROOT + "SegmentationClassAug")]
         
     if data_name == 'coco':
         files = [x.split('.')[0] for x in os.listdir(COCO_ROOT + "SegmentationClass")]
@@ -308,3 +308,7 @@ def make_torch_loader(dataset, files, config, mode='val'):
         "pin_memory" : True}
     
     return torch.utils.data.DataLoader(dataset, **loader_args)
+
+train, val  = make_data_splits('pascal', -1, (0.9, 0.1), shuffle = False)
+
+print(len(train), len(val))

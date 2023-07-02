@@ -5,9 +5,13 @@
 #SBATCH --gpus=1
 #SBATCH --partition=gpu
 #SBATCH --time=06:00:00
-#SBATCH --output=/home/mgonggri/master_thesis/output_files/test_run.txt
+#SBATCH --output=/home/mgonggri/master_thesis/output_files/TESTING.txt
+#SBATCH --job-name=test
+
+
+# [data_limit]  [geometry]  [dim]  [c]  [flat]  [batch_size]  [num_epochs]  [slr]  [precision]
+  
 
 source activate hyperbolic
-
 srun python /home/mgonggri/master_thesis/train.py \
- --geometry hyperbolic --dim 10 --num_epochs 15 --precision 64
+ --num_epochs 50 --c 0.2 --batch_size 3 --slr 0.0001
