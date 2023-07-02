@@ -168,6 +168,8 @@ deeplab.py
 
 .job
 
+.zip
+
 Annotations/
 ImageSets/
 JPEGImages/
