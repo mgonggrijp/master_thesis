@@ -314,6 +314,11 @@ if args.mode == 'segmenter':
     train_files, val_files = data_helpers.make_data_splits(
         args.dataset, limit=args.data_limit, split=(0.9, 0.1), shuffle=True)
     
+    print("[number of training samples]    ", len(train_files),
+        "\n[number of validation samples]  ", len(val_files) )
+    
+    exit()
+    
     train_loader = data_helpers.make_torch_loader(
         args.dataset, train_files, config, mode='train')
     

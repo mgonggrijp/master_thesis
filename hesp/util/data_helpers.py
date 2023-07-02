@@ -309,6 +309,3 @@ def make_torch_loader(dataset, files, config, mode='val'):
     
     return torch.utils.data.DataLoader(dataset, **loader_args)
 
-train, val  = make_data_splits('pascal', -1, (0.9, 0.1), shuffle = False)
-
-print(len(train), len(val))
