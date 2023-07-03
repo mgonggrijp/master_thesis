@@ -37,11 +37,13 @@ class Segmenter(torch.nn.Module):
             pretrained_backbone=config.segmenter._PRE_TRAINED_BB)
         
         if self.config.segmenter._RESUME:
+            print('Loading embedding model and embedding space state dicts..')
             self.embedding_space.load_state_dict(
                 torch.load(save_folder + "embedding_space.pt"))
             
             self.embedding_model.load_state_dict(
                 torch.load(save_folder + "embedding_model.pt"))
+            print('Done.')
             
             
         self.iou_fn = torchmetrics.classification.MulticlassJaccardIndex(
