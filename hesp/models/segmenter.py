@@ -12,6 +12,7 @@ import os
 
 
 class Segmenter(torch.nn.Module):
+    
     def __init__(self, tree: Tree, config: Config, device, save_folder: str = "saves/", seed: float = None):
         super().__init__()
         self.save_folder = save_folder
@@ -49,21 +50,38 @@ class Segmenter(torch.nn.Module):
         self.acc_fn = torchmetrics.classification.MulticlassAccuracy(
             config.dataset._NUM_CLASSES, average=None,  multidim_average='global', ignore_index=255, validate_args=False)
         
+        
+    def max_sample_norm_normalize(self, embeddings: torch.Tensor) -> torch.Tensor:
+        """ Normalize a batch of embeddings op shape (batch, dim, height, width) by the maximum norm over dim
+        dimension for every batch element and rescale them s.t. the maximum norm is equal to the radius 
+        of the embedding space curvature of 1 / sqrt(c). """
+        
+        # sh (batch, heigth, width)
+        norms = torch.linalg.vector_norm(embeddings, dim=1) 
+        
+        # sh (batch, )
+        max_sample_norms = norms.amax(dim=(1, 2)) 
+        
+        # sh (batch, dim, height, width)
+        normalized = embeddings / max_sample_norms[:, None, None, None] 
+
+        # sh (batch, dim, height, width)
+        rescaled_normalized = normalized * ( 1.0 / torch.sqrt(self.embedding_space.curvature) )
+                    
+        return rescaled_normalized
+            
     
     def forward(self, images):
         
-        embs = self.embedding_model(images) # sh (b, d, h, w)
+        # sh (batch, dim, height, width)
+        embs = self.embedding_model(images) 
         
-        norms = torch.linalg.vector_norm(embs, dim=1) # sh (b, h, w)
-        
-        max_sample_norms = norms.amax(dim=(1, 2)) # sh (b, )
-        
-        # normalize by the maximum norm in the same image and rescale by 
-        # the radius of the PCB s.t. the maximum norm is equal to this radius.
-        normalized = embs / max_sample_norms[:, None, None, None]  * \
-                    torch.sqrt(self.embedding_space.curvature)**-1 # sh (b, d, h, w)
-                         
-        cprobs = self.embedding_space(normalized, self.steps) # sh (b, c, h, w)
+        # normalize the norms in each sample by the maximum norm for that same sample;
+        # norms are rescaled by 1 / sqrt(c);
+        normalized = self.max_sample_norm_normalize(embs) # (batch, dim, height, width)
+   
+        # sh (batch, nclasses, height, width)
+        cprobs = self.embedding_space(normalized, self.steps) 
         
         return cprobs
 
@@ -142,6 +160,7 @@ class Segmenter(torch.nn.Module):
                     
                 torch.nn.utils.clip_grad_norm_(
                     self.embedding_space.offsets, self.config.segmenter._GRAD_CLIP)
+                
                 hce_loss.backward()
                 self.optimizer.step()
                 self.optimizer.zero_grad()
@@ -225,6 +244,7 @@ class Segmenter(torch.nn.Module):
         print('\n\n[Global Step]       ', self.global_step,
                 '\n[Average MIOU]      ', metrics['miou per class'].mean().item(), 
                 '\n[Average Accuracy]  ', metrics['acc per class'].mean().item()) 
+        
         
     def pretty_print(self, metrics_list):
         target = 15
