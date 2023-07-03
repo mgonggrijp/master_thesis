@@ -33,7 +33,6 @@ parser.add_argument(
     help='Wether or not to record the metrics for the training data during training.'
 )
 
-
 parser.add_argument(
     '--data_limit',
     default=-1,
@@ -48,7 +47,6 @@ parser.add_argument(
     help="The number of warmup epochs. \
          Linearly increases warmup from [1 / warmup_epochs * slr] to [slr]. "
 )
-
 
 parser.add_argument(
     '--val_metrics',
@@ -333,8 +331,6 @@ if args.mode == 'segmenter':
         args.dataset, val_files, config, mode='val')
         
     model = model_factory(config=config).to(args.device)
-    
-    exit()
     
     model.identifier = identifier
     

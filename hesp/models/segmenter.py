@@ -54,9 +54,9 @@ class Segmenter(torch.nn.Module):
         
         
     def max_sample_norm_normalize(self, embeddings: torch.Tensor) -> torch.Tensor:
-        """ Normalize a batch of embeddings op shape (batch, dim, height, width) by the maximum norm over dim
-        dimension for every batch element and rescale them s.t. the maximum norm is equal to the radius 
-        of the embedding space curvature of 1 / sqrt(c). """
+        """ Normalize a batch of embeddings of shape (batch, dim, height, width) by the maximum norm over dim
+        for every batch element and rescale them s.t. the maximum norm is equal to the radius 
+        of the embedding space curvature: 1 / sqrt(c). """
         
         # sh (batch, heigth, width)
         norms = torch.linalg.vector_norm(embeddings, dim=1) 
@@ -140,23 +140,19 @@ class Segmenter(torch.nn.Module):
                 self.running_loss += hce_loss.item()
                 
                 if self.steps % 50 == 0 and self.steps > 0:
+                    
                     with torch.no_grad():
                         accuracy = self.acc_fn.compute().cpu().mean().item()
                         miou = self.iou_fn.compute().cpu().mean().item()
-                        print('[global step]         ', round(self.global_step, 4))
-                        print('[average loss]        ', round(self.running_loss / (self.steps + 1), 4))
-                        print('[accuracy]            ', round(accuracy, 4))
-                        print('[miou]                ', round(miou, 4))
+                        print('[global step]         ', round(self.global_step, 5))
+                        print('[average loss]        ', round(self.running_loss / (self.steps + 1), 5))
+                        print('[accuracy]            ', round(accuracy, 5))
+                        print('[miou]                ', round(miou, 5))
                         
-                        offset_norms_0 = torch.linalg.vector_norm(self.embedding_space.offsets, dim=0).mean().item()
                         offset_norms_1 = torch.linalg.vector_norm(self.embedding_space.offsets, dim=1).mean().item()
-                        
-                        normal_norms_0 = torch.linalg.vector_norm(self.embedding_space.normals, dim=0).mean().item()
                         normal_norms_1 = torch.linalg.vector_norm(self.embedding_space.normals, dim=1).mean().item()
                         
-                        print('[offset norms dim 0] ', round(offset_norms_0, 8) )
                         print('[offset norms dim 1] ', round(offset_norms_1, 8) )
-                        print('[normal norm dim 0]  ', round(normal_norms_0, 8),  )
                         print('[normal norm dim 1]  ', round(normal_norms_1, 8),  '\n\n')
                     
                     
@@ -237,15 +233,14 @@ class Segmenter(torch.nn.Module):
 
 
     def print_metrics(self, metrics, ncls, i2c):
-        print('\n\n[accuracy per class]')
-        self.pretty_print([(i2c[i], metrics['acc per class'][i].item()) for i in range(ncls) ])
+        # print('\n\n[accuracy per class]')
+        # self.pretty_print([(i2c[i], metrics['acc per class'][i].item()) for i in range(ncls) ])
+        # print('\n\n[miou per class]')
+        # self.pretty_print([(i2c[i], metrics['miou per class'][i].item()) for i in range(ncls) ])
         
-        print('\n\n[miou per class]')
-        self.pretty_print([(i2c[i], metrics['miou per class'][i].item()) for i in range(ncls) ])
-        
-        print('\n\n[Global Step]       ', self.global_step,
-                '\n[Average MIOU]      ', metrics['miou per class'].mean().item(), 
-                '\n[Average Accuracy]  ', metrics['acc per class'].mean().item()) 
+        print('\n\n[global step]       ', self.global_step,
+                '\n[miou]              ', metrics['miou per class'].mean().item(), 
+                '\n[average accuracy]  ', metrics['acc per class'].mean().item()) 
         
         
     def pretty_print(self, metrics_list):
