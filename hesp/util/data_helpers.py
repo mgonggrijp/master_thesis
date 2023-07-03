@@ -244,7 +244,11 @@ class CocoDataset(torch.utils.data.Dataset):
         return image, labels, index
 
 
-def make_data_splits(data_name, limit, split, shuffle = False):
+def make_data_splits(data_name, limit, split, shuffle = False, seed = None):
+    
+    if type(seed) == float:
+        random.seed(seed)
+    
     """ Ignore the pre-determined train-val split and return a custom train-val
     file split based on the given split value. Used for Pascal only. """
 

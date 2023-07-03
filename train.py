@@ -319,7 +319,11 @@ if args.mode == 'segmenter':
     means = torch.load("datasets/" + args.dataset + "/means.pt")
     
     train_files, val_files = data_helpers.make_data_splits(
-        args.dataset, limit=args.data_limit, split=(0.9, 0.1), shuffle=True)
+        args.dataset,
+        limit=args.data_limit,
+        split=(0.8, 0.2),
+        shuffle=True,
+        seed=args.seed)
     
     print("[number of training samples]    ", len(train_files),
         "\n[number of validation samples]  ", len(val_files) )
@@ -328,7 +332,7 @@ if args.mode == 'segmenter':
         args.dataset, train_files, config, mode='train')
     
     val_loader = data_helpers.make_torch_loader(
-        args.dataset, val_files, config, mode='val')
+        args.dataset, val_files, config, mode='val')\
         
     model = model_factory(config=config).to(args.device)
     

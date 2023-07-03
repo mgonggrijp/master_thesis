@@ -155,7 +155,6 @@ class Segmenter(torch.nn.Module):
                         print('[offset norms dim 1] ', round(offset_norms_1, 8) )
                         print('[normal norm dim 1]  ', round(normal_norms_1, 8),  '\n\n')
                     
-                    
                 torch.nn.utils.clip_grad_norm_(
                     self.embedding_space.offsets, self.config.segmenter._GRAD_CLIP)
                 
