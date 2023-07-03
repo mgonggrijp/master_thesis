@@ -1,0 +1,20 @@
+slurmstepd: error: execve(): /home/mgonggri/master_thesis/train.py: Permission denied
+slurmstepd: error: execve(): /home/mgonggri/master_thesis/train.py: Permission denied
+srun: error: gcn36: tasks 0-1: Exited with exit code 13
+srun: launch/slurm: _step_signal: Terminating StepId=3008644.0
+cp: cannot stat '/home/mgonggri/master_thesis/outputs.txt': No such file or directory
+
+JOB STATISTICS
+==============
+Job ID: 3008644
+Cluster: snellius
+User/Group: mgonggri/mgonggri
+State: RUNNING
+Nodes: 1
+Cores per node: 36
+CPU Utilized: 00:00:00
+CPU Efficiency: 0.00% of 00:07:12 core-walltime
+Job Wall-clock time: 00:00:12
+Memory Utilized: 0.00 MB (estimated maximum)
+Memory Efficiency: 0.00% of 0.00 MB (0.00 MB/node)
+WARNING: Efficiency statistics may be misleading for RUNNING jobs.
