@@ -34,17 +34,14 @@ class Segmenter(torch.nn.Module):
             num_classes=config.segmenter._EFN_OUT_DIM,
             output_stride=config.segmenter._OUTPUT_STRIDE,
             pretrained_backbone=config.segmenter._PRE_TRAINED_BB)
-
-        # continue training using previous model state and embedding space offsets / normals
-        if config.segmenter._RESUME:
+        
+        if self.config.segmenter._RESUME:
+            self.embedding_space.load_state_dict(
+                torch.load(save_folder + "embedding_space.pt"))
+            
             self.embedding_model.load_state_dict(
-                torch.load(self.save_folder + 'model.pt'))
+                torch.load(save_folder + "embedding_model.pt"))
             
-            self.embedding_space.normals = torch.load(
-                self.save_folder + "normals.pt").to(self.device)
-            
-            self.embedding_space.offsets = torch.load(
-                self.save_folder + "offsets.pt").to(self.device)
             
         self.iou_fn = torchmetrics.classification.MulticlassJaccardIndex(
             config.dataset._NUM_CLASSES, average=None, ignore_index=255, validate_args=False)
@@ -173,7 +170,10 @@ class Segmenter(torch.nn.Module):
         folder =  self.config.segmenter._SAVE_FOLDER 
         if not os.path.exists(folder):
             os.mkdir(folder)
-        torch.save(self.state_dict(), folder + 'segmenter_state.pt' )
+        # torch.save(self.embedding_model.state_dict(), folder + 'segmenter.pt' )
+        torch.save(self.embedding_model.state_dict(), folder + 'embedding_model.pt' )
+        torch.save(self.embedding_space.state_dict(), folder + 'embedding_space.pt' )
+        
     
     def metrics_step(self, cprobs, labels):           
         with torch.no_grad():

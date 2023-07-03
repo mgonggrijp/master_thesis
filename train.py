@@ -334,6 +334,13 @@ if args.mode == 'segmenter':
         
     model = model_factory(config=config).to(args.device)
     
+    if args.resume:
+        print('Loading from state dict..')
+        state_dict = torch.load(config.segmenter._SAVE_FOLDER + 'segmenter.pt')
+        model.load_state_dict(state_dict)
+        print('Done..')
+        exit()
+    
     model.identifier = identifier
     
     backbone_params = {"params" : model.embedding_model.backbone.parameters(), "lr" : args.slr/10}
