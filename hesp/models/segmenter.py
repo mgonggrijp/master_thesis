@@ -1,3 +1,7 @@
+import logging
+logging.basicConfig(filename="outputs.log", level=logging.INFO)
+logging.getLogger().addHandler(logging.StreamHandler())
+
 from hesp.util.segmenter_helpers import *
 from hesp.config.config import Config
 from hesp.embedding_space.hyperbolic_embedding_space import HyperbolicEmbeddingSpace
@@ -9,9 +13,6 @@ import torchmetrics
 import random
 from hesp.util.data_helpers import imshow
 import os
-import logging
-
-
 
 
 class Segmenter(torch.nn.Module):
@@ -93,20 +94,22 @@ class Segmenter(torch.nn.Module):
         self.steps = 0
         self.running_loss = 0.
         
+        edx = str(self.edx)
+        
         if self.edx + 1 >= self.warmup_epochs:
             self.scheduler.step()
-            logging.info('[new learning rate epoch {}]'.format(self.edx),
+            logging.info('[new learning rate epoch {}]'.format(edx),
                     self.scheduler.get_last_lr())
         
         if self.computing_metrics:
-            logging.info('----------------[Training Metrics Epoch {}]----------------\n'.format(self.edx))
+            logging.info('----------------[Training Metrics Epoch {}]----------------\n'.format(edx))
             self.compute_metrics()
-            logging.info('----------------[End Training Metrics Epoch {}]----------------\n'.format(self.edx))
+            logging.info('----------------[End Training Metrics Epoch {}]----------------\n'.format(edx))
             
         if self.val_metrics:
-            logging.info('----------------[Validation Metrics Epoch {}]----------------\n'.format(self.edx))
+            logging.info('----------------[Validation Metrics Epoch {}]----------------\n'.format(edx))
             self.compute_metrics_dataset(self.val_loader)
-            logging.info('----------------[End Validation Metrics Epoch {}]----------------\n'.format(self.edx))
+            logging.info('----------------[End Validation Metrics Epoch {}]----------------\n'.format(edx))
 
 
     def update_model(self):
