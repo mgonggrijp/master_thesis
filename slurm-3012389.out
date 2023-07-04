@@ -1,0 +1,25 @@
+# conda environments:
+#
+hyperbolic               /home/mgonggri/.conda/envs/hyperbolic
+base                  *  /sw/arch/RHEL8/EB_production/2022/software/Anaconda3/2022.05
+
+/var/spool/slurm/slurmd/job3012389/slurm_script: line 21: hyperbolic: No such file or directory
+/sw/arch/RHEL8/EB_production/2022/software/Anaconda3/2022.05/bin/python: Error while finding module specification for '/home/mgonggri/master_thesis/train.py' (ModuleNotFoundError: No module named '/home/mgonggri/master_thesis/train'). Try using '/home/mgonggri/master_thesis/train' instead of '/home/mgonggri/master_thesis/train.py' as the module name.
+srun: error: gcn23: task 0: Exited with exit code 1
+srun: launch/slurm: _step_signal: Terminating StepId=3012389.0
+cp: cannot stat 'output': No such file or directory
+
+JOB STATISTICS
+==============
+Job ID: 3012389
+Cluster: snellius
+User/Group: mgonggri/mgonggri
+State: RUNNING
+Nodes: 1
+Cores per node: 18
+CPU Utilized: 00:00:00
+CPU Efficiency: 0.00% of 00:03:54 core-walltime
+Job Wall-clock time: 00:00:13
+Memory Utilized: 0.00 MB (estimated maximum)
+Memory Efficiency: 0.00% of 0.00 MB (0.00 MB/node)
+WARNING: Efficiency statistics may be misleading for RUNNING jobs.

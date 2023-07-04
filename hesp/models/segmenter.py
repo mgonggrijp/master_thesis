@@ -19,7 +19,7 @@ class Segmenter(torch.nn.Module):
         self.config = config
         self.tree = tree
         self.seed = seed
-        self.train_metrics = config.segmenter._TRAIN_METRICS
+        self.train_metrics = config.segmenter._TRAIN_METRICS    
         self.val_metrics = config.segmenter._VAL_METRICS
         self.device = device
 
