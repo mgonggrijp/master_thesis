@@ -9,6 +9,9 @@ import torchmetrics
 import random
 from hesp.util.data_helpers import imshow
 import os
+import logging
+
+
 
 
 class Segmenter(torch.nn.Module):
@@ -38,13 +41,13 @@ class Segmenter(torch.nn.Module):
             pretrained_backbone=config.segmenter._PRE_TRAINED_BB)
         
         if self.config.segmenter._RESUME:
-            print('Loading embedding model and embedding space state dicts..')
+            logging.info('Loading embedding model and embedding space state dicts..')
             self.embedding_space.load_state_dict(
                 torch.load(save_folder + "embedding_space.pt"))
             
             self.embedding_model.load_state_dict(
                 torch.load(save_folder + "embedding_model.pt"))
-            print('Done.')
+            logging.info('Done.')
             
             
         self.iou_fn = torchmetrics.classification.MulticlassJaccardIndex(
@@ -92,18 +95,18 @@ class Segmenter(torch.nn.Module):
         
         if self.edx + 1 >= self.warmup_epochs:
             self.scheduler.step()
-            print('[new learning rate epoch {}]'.format(self.edx),
+            logging.info('[new learning rate epoch {}]'.format(self.edx),
                     self.scheduler.get_last_lr())
         
         if self.computing_metrics:
-            print('----------------[Training Metrics Epoch {}]----------------\n'.format(self.edx))
+            logging.info('----------------[Training Metrics Epoch {}]----------------\n'.format(self.edx))
             self.compute_metrics()
-            print('----------------[End Training Metrics Epoch {}]----------------\n'.format(self.edx))
+            logging.info('----------------[End Training Metrics Epoch {}]----------------\n'.format(self.edx))
             
         if self.val_metrics:
-            print('----------------[Validation Metrics Epoch {}]----------------\n'.format(self.edx))
+            logging.info('----------------[Validation Metrics Epoch {}]----------------\n'.format(self.edx))
             self.compute_metrics_dataset(self.val_loader)
-            print('----------------[End Validation Metrics Epoch {}]----------------\n'.format(self.edx))
+            logging.info('----------------[End Validation Metrics Epoch {}]----------------\n'.format(self.edx))
 
 
     def update_model(self):
@@ -136,14 +139,17 @@ class Segmenter(torch.nn.Module):
         if self.edx < self.warmup_epochs: 
             for i, param_group in enumerate(self.optimizer.param_groups):
                     param_group['lr'] = self.init_lrs[i] * (self.edx + 1) / self.warmup_epochs
-                    print('[new learning rate]', param_group['lr'])
+                    logging.info('[new learning rate]', param_group['lr'])
      
             
     def train_fn(self, train_loader, val_loader, optimizer, scheduler, warmup_epochs):
         self.init_training_states(train_loader, val_loader, optimizer, scheduler, warmup_epochs)
         
+        logging.getLogger().addHandler(logging.StreamHandler())
+        logging.basicConfig(filename=self.config.segmenter._SAVE_FOLDER + 'output.log', level=logging.INFO)
+        
         for edx in range(self.config.segmenter._NUM_EPOCHS):
-            print('     [epoch]', edx)
+            logging.info('     [epoch]', edx)
             self.steps = 0
             self.edx = edx
             
@@ -167,7 +173,7 @@ class Segmenter(torch.nn.Module):
             # reset steps, increment epoch, take a scheduler step and 
             self.end_of_epoch()
             
-        print('Training done. Saving final model state..')
+        logging.info('Training done. Saving final model state..')
         self.save_states()
     
     
@@ -193,6 +199,7 @@ class Segmenter(torch.nn.Module):
         self.images = torch.cat(image_batch).to(self.device)
         self.labels = torch.cat(label_batch).to(self.device).squeeze()
         
+        
     def init_training_states(self, train, val_loader, optimizer, scheduler, warmup_epochs):
         """ Initialize all the variables into self which are used for training. """
         
@@ -213,20 +220,23 @@ class Segmenter(torch.nn.Module):
         self.steps = 0
         
         if type(self.seed) == float:
-            print('[set random seed]  ', self.seed)
+            logging.info('[set random seed]  ', self.seed)
             torch.manual_seed(self.seed)
             random.seed(self.seed)
             
         self.init_lrs = []
         for param_group in self.optimizer.param_groups:
             self.init_lrs.append(param_group['lr'])
-        print(self.init_lrs)
+        logging.info(self.init_lrs)
     
     
     def train_fn_stochastic(self, train_dataset, val_loader, optimizer, scheduler, warmup_epochs):
         """ Probabilistic training loop that draws sample indeces from a multinomial distribtution. """
-        print("Starting stochastic training...")
+        logging.info("Starting stochastic training...")
         self.init_training_states(train_dataset, val_loader, optimizer, scheduler, warmup_epochs)
+        
+        logging.getLogger().addHandler(logging.StreamHandler())
+        logging.basicConfig(filename=self.config.segmenter._SAVE_FOLDER + 'output.log', level=logging.INFO)
         
         torch.set_printoptions(sci_mode=False)
         
@@ -266,7 +276,7 @@ class Segmenter(torch.nn.Module):
             # reset steps, increment epoch, take a scheduler step and 
             self.end_of_epoch()
             
-        print('Training done. Saving final model state..')
+        logging.info('Training done. Saving final model state..')
         self.save_states()
                 
                 
@@ -285,16 +295,16 @@ class Segmenter(torch.nn.Module):
             with torch.no_grad():
                 accuracy = self.acc_fn.compute().cpu().mean().item()
                 miou = self.iou_fn.compute().cpu().mean().item()
-                print('[global step]         ', round(self.global_step, 5))
-                print('[average loss]        ', round(self.running_loss / (self.steps + 1), 5))
-                print('[accuracy]            ', round(accuracy, 5))
-                print('[miou]                ', round(miou, 5))
+                logging.info('[global step]         ', round(self.global_step, 5))
+                logging.info('[average loss]        ', round(self.running_loss / (self.steps + 1), 5))
+                logging.info('[accuracy]            ', round(accuracy, 5))
+                logging.info('[miou]                ', round(miou, 5))
                 
                 offset_norms_1 = torch.linalg.vector_norm(self.embedding_space.offsets, dim=1).mean().item()
                 normal_norms_1 = torch.linalg.vector_norm(self.embedding_space.normals, dim=1).mean().item()
                 
-                print('[offset norms dim 1] ', round(offset_norms_1, 8) )
-                print('[normal norm dim 1]  ', round(normal_norms_1, 8),  '\n\n')
+                logging.info('[offset norms dim 1] ', round(offset_norms_1, 8) )
+                logging.info('[normal norm dim 1]  ', round(normal_norms_1, 8),  '\n\n')
     
     
     def compute_metrics(self):
@@ -333,12 +343,12 @@ class Segmenter(torch.nn.Module):
 
 
     def print_metrics(self, metrics, ncls, i2c):
-        # print('\n\n[accuracy per class]')
-        # self.pretty_print([(i2c[i], metrics['acc per class'][i].item()) for i in range(ncls) ])
-        # print('\n\n[miou per class]')
-        # self.pretty_print([(i2c[i], metrics['miou per class'][i].item()) for i in range(ncls) ])
+        # logging.info('\n\n[accuracy per class]')
+        # self.pretty_logging.info([(i2c[i], metrics['acc per class'][i].item()) for i in range(ncls) ])
+        # logging.info('\n\n[miou per class]')
+        # self.pretty_logging.info([(i2c[i], metrics['miou per class'][i].item()) for i in range(ncls) ])
         
-        print('\n\n[global step]       ', self.global_step,
+        logging.info('\n\n[global step]       ', self.global_step,
                 '\n[miou]              ', metrics['miou per class'].mean().item(), 
                 '\n[average accuracy]  ', metrics['acc per class'].mean().item()) 
         
@@ -347,5 +357,5 @@ class Segmenter(torch.nn.Module):
         target = 15
         for label, x in metrics_list:
             offset = target - len(label)
-            print(label, " "*offset, x)
+            logging.info(label, " "*offset, x)
             

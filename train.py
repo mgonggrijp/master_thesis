@@ -7,11 +7,11 @@ from hesp.util import data_helpers
 import geoopt
 from hesp.util.loss import *
 import matplotlib.pyplot as plt
+import logging
+
 
 torch.set_printoptions(threshold=float('inf'))
 torch.set_printoptions(sci_mode=False)
-
-print('[Initializing...]')
 
 # region argparse
 parser = argparse.ArgumentParser(
@@ -320,6 +320,9 @@ if args.mode == 'segmenter':
     identifier += "_slr=" + str(args.slr) 
     identifier += "_id=" + str(args.id) if args.id else ""
     config.segmenter._SAVE_FOLDER = "saves/" + identifier + "/"
+    logging.getLogger().addHandler(logging.StreamHandler())
+    logging.basicConfig(filename=config.segmenter._SAVE_FOLDER + 'output.log', level=logging.INFO)
+    
 # endregion identifier
 
 
@@ -333,7 +336,7 @@ if args.mode == 'segmenter':
         shuffle=True,
         seed=args.seed)
     
-    print("[number of training samples]    ", len(train_files),
+    logging.info("[number of training samples]    ", len(train_files),
         "\n[number of validation samples]  ", len(val_files) )
     
     if args.train_stochastic:
@@ -372,18 +375,18 @@ if args.mode == 'segmenter':
     scheduler = torch.optim.lr_scheduler.PolynomialLR(
         optimizer, total_iters=args.num_epochs, power=0.9, last_epoch=-1, verbose=False)
     
-    print("".join([arg + ' : ' + str(args.__dict__[arg]) + "\n" for arg in args.__dict__]))
+    logging.info("".join([arg + ' : ' + str(args.__dict__[arg]) + "\n" for arg in args.__dict__]))
     
 # endregion model and data init
-    print('[Training...]')
-    
     # train using a stochastic method
     if args.train_stochastic:
+        logging.info('[Training with stochastic batching...]')
         model.train_fn_stochastic(
             train_dataset, val_loader, optimizer, scheduler, args.warmup_epochs)
 
     # train with standard dataloading, including shuffling        
     else:
+        logging.info('[Training with default shuffled batching...]')
         model.train_fn_(
             train_loader, val_loader, optimizer, scheduler, args.warmup_epochs)
 
