@@ -34,6 +34,13 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    '--train_stochastic',
+    action='store_true',
+    default=False,
+    help='If to use stochastic training.'
+)
+
+parser.add_argument(
     '--data_limit',
     default=-1,
     type=int,
@@ -288,6 +295,7 @@ if args.mode == 'segmenter':
     config.segmenter._SEED = args.seed
     config.segmenter._TRAIN_METRICS = args.train_metrics
     config.segmenter._VAL_METRICS = args.val_metrics
+    config.segmenter._TRAIN_STOCHASTIC = args.train_stochastic
     
 
     if not args.num_epochs:
@@ -328,9 +336,20 @@ if args.mode == 'segmenter':
     print("[number of training samples]    ", len(train_files),
         "\n[number of validation samples]  ", len(val_files) )
     
-    train_loader = data_helpers.make_torch_loader(
-        args.dataset, train_files, config, mode='train')
+    if args.train_stochastic:
+        train_dataset = data_helpers.PascalDataset(
+                    train_files,
+                    output_size=(config.segmenter._HEIGHT, config.segmenter._WIDTH),
+                    scale=(config.segmenter._MIN_SCALE, config.segmenter._MAX_SCALE))
+        # set dataset into training mode and give it the means
+        train_dataset.means = torch.load('datasets/pascal/means.pt')
+        train_dataset.use_transforms = True
+        train_dataset.is_training = True
     
+    else:
+        train_loader = data_helpers.make_torch_loader(
+            args.dataset, train_files, config, mode='train')
+        
     val_loader = data_helpers.make_torch_loader(
         args.dataset, val_files, config, mode='val')\
         
@@ -357,5 +376,14 @@ if args.mode == 'segmenter':
     
 # endregion model and data init
     print('[Training...]')
-    model.train_fn(train_loader, val_loader, optimizer, scheduler, args.warmup_epochs)
+    
+    # train using a stochastic method
+    if args.train_stochastic:
+        model.train_fn_stochastic(
+            train_dataset, val_loader, optimizer, scheduler, args.warmup_epochs)
+
+    # train with standard dataloading, including shuffling        
+    else:
+        model.train_fn_(
+            train_loader, val_loader, optimizer, scheduler, args.warmup_epochs)
 

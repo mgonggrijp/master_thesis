@@ -13,6 +13,7 @@ import os
 
 class Segmenter(torch.nn.Module):
     
+    
     def __init__(self, tree: Tree, config: Config, device, save_folder: str = "saves/", seed: float = None):
         super().__init__()
         self.save_folder = save_folder
@@ -73,131 +74,228 @@ class Segmenter(torch.nn.Module):
         return rescaled_normalized
             
     
-    def forward(self, images):
-        
+    def forward(self):
         # sh (batch, dim, height, width)
-        embs = self.embedding_model(images) 
+        embs = self.embedding_model(self.images) 
         
         # normalize the norms in each sample by the maximum norm for that same sample;
         # norms are rescaled by 1 / sqrt(c);
         normalized = self.max_sample_norm_normalize(embs) # (batch, dim, height, width)
    
         # sh (batch, nclasses, height, width)
-        cprobs = self.embedding_space(normalized, self.steps) 
-        
-        return cprobs
+        self.cprobs = self.embedding_space(normalized, self.steps) 
 
+    
+    def end_of_epoch(self):
+        self.steps = 0
+        self.running_loss = 0.
+        
+        if self.edx + 1 >= self.warmup_epochs:
+            self.scheduler.step()
+            print('[new learning rate epoch {}]'.format(self.edx),
+                    self.scheduler.get_last_lr())
+        
+        if self.computing_metrics:
+            print('----------------[Training Metrics Epoch {}]----------------\n'.format(self.edx))
+            self.compute_metrics()
+            print('----------------[End Training Metrics Epoch {}]----------------\n'.format(self.edx))
+            
+        if self.val_metrics:
+            print('----------------[Validation Metrics Epoch {}]----------------\n'.format(self.edx))
+            self.compute_metrics_dataset(self.val_loader)
+            print('----------------[End Validation Metrics Epoch {}]----------------\n'.format(self.edx))
+
+
+    def update_model(self):
+        valid_mask = self.labels <= self.tree.M - 1
+                
+        valid_cprobs = self.cprobs.moveaxis(1, -1)[valid_mask]
+        
+        valid_labels = self.labels[valid_mask]
+        
+        hce_loss = loss.CCE(valid_cprobs, valid_labels, self.tree, self.class_weights)
+        
+        self.running_loss += hce_loss.item()
+        
+        self.print_intermediate()
+            
+        torch.nn.utils.clip_grad_norm_(
+            self.embedding_space.offsets,
+            self.config.segmenter._GRAD_CLIP)
+        
+        hce_loss.backward()
+        self.optimizer.step()
+        self.optimizer.zero_grad()
+        self.steps += 1
+        self.global_step += 1
+       
+        
+    def warmup(self):
+        """ Basic linear warmup scheduling. """
+         # warmup schedule
+        if self.edx < self.warmup_epochs: 
+            for i, param_group in enumerate(self.optimizer.param_groups):
+                    param_group['lr'] = self.init_lrs[i] * (self.edx + 1) / self.warmup_epochs
+                    print('[new learning rate]', param_group['lr'])
+     
             
     def train_fn(self, train_loader, val_loader, optimizer, scheduler, warmup_epochs):
-        self.optimizer = optimizer
-        self.scheduler = scheduler
-        self.computing_metrics = True
-        self.train()
-        
-        if type(self.seed) == float:
-            print('[random seed]  ', self.seed)
-            torch.manual_seed(self.seed)
-            random.seed(self.seed)
-
-        init_lrs = []
-        for param_group in optimizer.param_groups:
-            init_lrs.append( param_group['lr'])
-        print(init_lrs)
-        
-        self.running_loss = 0.
-        self.global_step = 0
-        torch.set_printoptions(sci_mode=False)
-        
-        class_weights = torch.load("datasets/pascal/class_weights.pt").to(self.device)
+        self.init_training_states(train_loader, val_loader, optimizer, scheduler, warmup_epochs)
         
         for edx in range(self.config.segmenter._NUM_EPOCHS):
             print('     [epoch]', edx)
             self.steps = 0
+            self.edx = edx
             
-            # warmup schedule
-            if edx + 1 <= warmup_epochs: 
-                for i, param_group in enumerate(optimizer.param_groups):
-                        param_group['lr'] = init_lrs[i] * (edx + 1) / warmup_epochs
-                        print('[new learning rate]', param_group['lr'])
+            # if edx + 1 <= warmup_epochs take a warming up step
+            self.warmup()
             
             for images, labels, _ in train_loader:
-                labels = labels.to(self.device).squeeze()
-                images = images.to(self.device)
+                self.labels = labels.to(self.device).squeeze()
+                self.images = images.to(self.device)
                 
-                cprobs = self.forward(images)
+                # compute the class probabilities for each pixel;
+                self.forward()
                 
+                # print intermediate metrics;
                 if self.computing_metrics:
-                    self.metrics_step(cprobs, labels)
+                    self.metrics_step()
                 
-                valid_mask = labels <= self.tree.M - 1
-                
-                valid_cprobs = cprobs.moveaxis(1, -1)[valid_mask]
-                
-                valid_labels = labels[valid_mask]
-                
-                hce_loss = loss.CCE(valid_cprobs, valid_labels, self.tree, class_weights)
-                
-                self.running_loss += hce_loss.item()
-                
-                if self.steps % 50 == 0 and self.steps > 0:
-                    
-                    with torch.no_grad():
-                        accuracy = self.acc_fn.compute().cpu().mean().item()
-                        miou = self.iou_fn.compute().cpu().mean().item()
-                        print('[global step]         ', round(self.global_step, 5))
-                        print('[average loss]        ', round(self.running_loss / (self.steps + 1), 5))
-                        print('[accuracy]            ', round(accuracy, 5))
-                        print('[miou]                ', round(miou, 5))
-                        
-                        offset_norms_1 = torch.linalg.vector_norm(self.embedding_space.offsets, dim=1).mean().item()
-                        normal_norms_1 = torch.linalg.vector_norm(self.embedding_space.normals, dim=1).mean().item()
-                        
-                        print('[offset norms dim 1] ', round(offset_norms_1, 8) )
-                        print('[normal norm dim 1]  ', round(normal_norms_1, 8),  '\n\n')
-                    
-                torch.nn.utils.clip_grad_norm_(
-                    self.embedding_space.offsets, self.config.segmenter._GRAD_CLIP)
-                
-                hce_loss.backward()
-                self.optimizer.step()
-                self.optimizer.zero_grad()
-                self.steps += 1
-                self.global_step += 1
+                # compute the loss and update model parameters;
+                self.update_model()
 
-            self.steps = 0
-            self.running_loss = 0.
+            # reset steps, increment epoch, take a scheduler step and 
+            self.end_of_epoch()
             
-            if edx + 1 >= warmup_epochs:
-                scheduler.step()
-                print('[new learning rate epoch {}]'.format(edx),
-                      scheduler.get_last_lr())
-            
-            if self.computing_metrics:
-                print('----------------[Training Metrics Epoch {}]----------------\n'.format(edx))
-                self.compute_metrics()
-                print('----------------[End Training Metrics Epoch {}]----------------\n'.format(edx))
-                
-            if self.val_metrics:
-                print('----------------[Validation Metrics Epoch {}]----------------\n'.format(edx))
-                self.compute_metrics_dataset(val_loader)
-                print('----------------[End Validation Metrics Epoch {}]----------------\n'.format(edx))
-    
         print('Training done. Saving final model state..')
+        self.save_states()
+    
+    
+    def save_states(self):
         folder =  self.config.segmenter._SAVE_FOLDER 
         if not os.path.exists(folder):
             os.mkdir(folder)
-        # torch.save(self.embedding_model.state_dict(), folder + 'segmenter.pt' )
         torch.save(self.embedding_model.state_dict(), folder + 'embedding_model.pt' )
         torch.save(self.embedding_space.state_dict(), folder + 'embedding_space.pt' )
-        
     
-    def metrics_step(self, cprobs, labels):           
-        with torch.no_grad():
-            joints = self.embedding_space.get_joints(cprobs)
-            preds = self.embedding_space.decide(joints)
-            iou = self.iou_fn.forward(preds, labels)
-            acc = self.acc_fn.forward(preds, labels)
+    
+    def collate_fn(self):
+        """ Given a dataset and a list of indeces return a batch of samples.
+        Returns a tuple of (batch_samples, batch_labels) """
+        image_batch = []
+        label_batch = []
+        
+        for idx in self.batch_indeces:
+            samples, labels, _ = self.dataset[idx]
+            image_batch.append(samples[None, :])
+            label_batch.append(labels)
+            
+        self.images = torch.cat(image_batch).to(self.device)
+        self.labels = torch.cat(label_batch).to(self.device).squeeze()
+        
+    def init_training_states(self, train, val_loader, optimizer, scheduler, warmup_epochs):
+        """ Initialize all the variables into self which are used for training. """
+        
+        if self.config.segmenter._TRAIN_STOCHASTIC:
+            self.dataset = train
+            self.num_samples = len(self.dataset)
+            self.batch_size = self.config.segmenter._BATCH_SIZE
+            self.sample_probs = torch.ones(self.num_samples) / self.num_samples
+            
+        self.val_loader = val_loader
+        self.scheduler = scheduler
+        self.optimizer = optimizer
+        self.class_weights = torch.load("datasets/pascal/class_weights.pt").to(self.device)
+        self.warmup_epochs = warmup_epochs
+        self.computing_metrics = True
+        self.running_loss = 0.0
+        self.global_step = 0
+        self.steps = 0
+        
+        if type(self.seed) == float:
+            print('[set random seed]  ', self.seed)
+            torch.manual_seed(self.seed)
+            random.seed(self.seed)
+            
+        self.init_lrs = []
+        for param_group in self.optimizer.param_groups:
+            self.init_lrs.append(param_group['lr'])
+        print(self.init_lrs)
+    
+    
+    def train_fn_stochastic(self, train_dataset, val_loader, optimizer, scheduler, warmup_epochs):
+        """ Probabilistic training loop that draws sample indeces from a multinomial distribtution. """
+        print("Starting stochastic training...")
+        self.init_training_states(train_dataset, val_loader, optimizer, scheduler, warmup_epochs)
+        
+        torch.set_printoptions(sci_mode=False)
+        
+        for edx in range(self.config.segmenter._NUM_EPOCHS):
+            self.edx = edx
+            
+            # generate all sample indeces for this epoch; allow for doubles
+            indeces = torch.multinomial(self.sample_probs, self.num_samples, replacement=True)
+            
+            # warmup schedule
+            self.warmup()
+            
+            for i in range(0, self.num_samples, self.batch_size):
+                # get slices of batch size for the sample indeces
+                bottom, upper = i, i + self.batch_size
+                
+                # drop last batch if it becomes smaller than 2 samples;
+                if self.num_samples - i < 2:
+                    break
+                
+                # get the indeces for current batch;
+                self.batch_indeces = indeces[bottom : upper]
+                
+                # make the batch of images and labels using the indeces;
+                self.collate_fn()
+                
+                # compute the class probabilities for each pixel;
+                self.forward()
+                
+                # print intermediate metrics;
+                if self.computing_metrics:
+                    self.metrics_step()
+                
+                # compute the loss and update model parameters;
+                self.update_model()
 
+            # reset steps, increment epoch, take a scheduler step and 
+            self.end_of_epoch()
+            
+        print('Training done. Saving final model state..')
+        self.save_states()
+                
+                
+    def metrics_step(self):           
+        with torch.no_grad():
+            joints = self.embedding_space.get_joints(self.cprobs)
+            preds = self.embedding_space.decide(joints)
+            iou = self.iou_fn.forward(preds, self.labels)
+            acc = self.acc_fn.forward(preds, self.labels)
+
+    
+    def print_intermediate(self, print_every=50):
+        
+        if self.steps % print_every == 0 and self.steps > 0:
+            
+            with torch.no_grad():
+                accuracy = self.acc_fn.compute().cpu().mean().item()
+                miou = self.iou_fn.compute().cpu().mean().item()
+                print('[global step]         ', round(self.global_step, 5))
+                print('[average loss]        ', round(self.running_loss / (self.steps + 1), 5))
+                print('[accuracy]            ', round(accuracy, 5))
+                print('[miou]                ', round(miou, 5))
+                
+                offset_norms_1 = torch.linalg.vector_norm(self.embedding_space.offsets, dim=1).mean().item()
+                normal_norms_1 = torch.linalg.vector_norm(self.embedding_space.normals, dim=1).mean().item()
+                
+                print('[offset norms dim 1] ', round(offset_norms_1, 8) )
+                print('[normal norm dim 1]  ', round(normal_norms_1, 8),  '\n\n')
+    
     
     def compute_metrics(self):
         
@@ -224,10 +322,13 @@ class Segmenter(torch.nn.Module):
     def compute_metrics_dataset(self, loader: torch.utils.data.DataLoader):
         with torch.no_grad():
             for images, labels, _ in loader:
-                images = images.to(self.device)
-                labels = labels.to(self.device).squeeze()
-                cprobs = self.forward(images)
-                self.metrics_step(cprobs, labels)
+                self.images = images.to(self.device)
+                self.labels = labels.to(self.device).squeeze()
+                
+                self.forward()
+                
+                self.metrics_step()
+                
             self.compute_metrics()
 
 
