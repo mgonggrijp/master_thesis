@@ -318,7 +318,8 @@ if args.mode == 'segmenter':
     identifier += "_slr=" + str(args.slr) 
     identifier += "_id=" + str(args.id) if args.id else ""
     config.segmenter._SAVE_FOLDER = "saves/" + identifier + "/"
-    os.mkdir(config.segmenter._SAVE_FOLDER)
+    if not os.path.exists(config.segmenter._SAVE_FOLDER):
+        os.mkdir(config.segmenter._SAVE_FOLDER)
     
 # endregion identifier
 
@@ -337,7 +338,6 @@ if args.mode == 'segmenter':
         print("[number of training samples]    {}".format( str(len(train_files)) ), file=f)
         print("[number of validation samples]  {}".format( str(len(val_files)) ), file=f)
         
-    exit()
     if args.train_stochastic:
         train_dataset = data_helpers.PascalDataset(
                     train_files,
@@ -374,18 +374,25 @@ if args.mode == 'segmenter':
     scheduler = torch.optim.lr_scheduler.PolynomialLR(
         optimizer, total_iters=args.num_epochs, power=0.9, last_epoch=-1, verbose=False)
     
-    print("".join([arg + ' : ' + str(args.__dict__[arg]) + "\n" for arg in args.__dict__]))
+    with open(config.segmenter._SAVE_FOLDER + 'output.txt', 'a') as f:
+        print("".join([arg + ' : ' + str(args.__dict__[arg]) + "\n" for arg in args.__dict__]), file=f)
     
 # endregion model and data init
     # train using a stochastic method
     if args.train_stochastic:
-        print('[Training with stochastic batching...]')
+        
+        with open(config.segmenter._SAVE_FOLDER + 'output.txt', 'a') as f:
+            print('[Training with stochastic batching...]', file=f)
+            
         model.train_fn_stochastic(
             train_dataset, val_loader, optimizer, scheduler, args.warmup_epochs)
 
     # train with standard dataloading, including shuffling        
     else:
-        print('[Training with default shuffled batching...]')
+
+        with open(config.segmenter._SAVE_FOLDER + 'output.txt', 'a') as f:
+            print('[Training with default shuffled batching...]', file=f)
+            
         model.train_fn_(
             train_loader, val_loader, optimizer, scheduler, args.warmup_epochs)
 

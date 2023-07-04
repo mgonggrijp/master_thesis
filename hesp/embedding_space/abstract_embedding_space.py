@@ -62,10 +62,10 @@ class AbstractEmbeddingSpace(torch.nn.Module):
         # embed the vectors in poincareball
         x = self.project(x)
         
-        if steps % 50 == 0:
+        if steps % 50 == 0 and steps > 0:
             with torch.no_grad():
-                print('[embedding norms]',
-                    torch.linalg.vector_norm(x, dim=1).mean().item() )
+                with open(self.config.segmenter._SAVE_FOLDER + 'output.txt', 'a') as f:
+                    print('[embedding norms]', torch.linalg.vector_norm(x, dim=1).mean().item(), file=f )
         
         # compute the conditional probabilities
         x = self.run(x)
