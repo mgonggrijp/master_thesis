@@ -7,6 +7,7 @@ from hesp.util import data_helpers
 import geoopt
 import os
 
+ROOT = "~/home/mgonggri/master_thesis/saves"
 
 torch.set_printoptions(threshold=float('inf'))
 torch.set_printoptions(sci_mode=False)
@@ -23,6 +24,15 @@ parser.add_argument(
     default='segmenter',
     help="Whether to train a segmenter."
 )
+
+
+parser.add_argument(
+    '--save_state',
+    action='store_true',
+    default=False,
+    help='Whether to save the final model states.'
+)
+
 
 parser.add_argument(
     '--train_metrics',
@@ -294,6 +304,7 @@ if args.mode == 'segmenter':
     config.segmenter._TRAIN_METRICS = args.train_metrics
     config.segmenter._VAL_METRICS = args.val_metrics
     config.segmenter._TRAIN_STOCHASTIC = args.train_stochastic
+    config.segmenter._SAVE_STATE = args.save_state
     
 
     if not args.num_epochs:
@@ -317,10 +328,7 @@ if args.mode == 'segmenter':
     identifier += "_bs=" + str(args.batch_size)
     identifier += "_slr=" + str(args.slr) 
     identifier += "_id=" + str(args.id) if args.id else ""
-    config.segmenter._SAVE_FOLDER = "saves/" + identifier + "/"
-    if not os.path.exists(config.segmenter._SAVE_FOLDER):
-        os.mkdir(config.segmenter._SAVE_FOLDER)
-    
+    config.segmenter._SAVE_FOLDER = ROOT + "saves/" + identifier + "/"
 # endregion identifier
 
 
@@ -334,10 +342,9 @@ if args.mode == 'segmenter':
         shuffle=True,
         seed=args.seed)
     
-    with open(config.segmenter._SAVE_FOLDER + 'output.txt', 'a') as f:
-        print("[number of training samples]    {}".format( str(len(train_files)) ), file=f)
-        print("[number of validation samples]  {}".format( str(len(val_files)) ), file=f)
-        
+    print("[number of training samples]    {}".format( str(len(train_files) )))
+    print("[number of validation samples]  {}".format( str(len(val_files)) ) )
+    
     if args.train_stochastic:
         train_dataset = data_helpers.PascalDataset(
                     train_files,
@@ -357,8 +364,6 @@ if args.mode == 'segmenter':
         
     model = model_factory(config=config).to(args.device)
     
-    print(model.tree.hmat, model.tree.sibmat)
-    
     model.identifier = identifier
     
     backbone_params = {"params" : model.embedding_model.backbone.parameters(), "lr" : args.slr/10}
@@ -376,24 +381,20 @@ if args.mode == 'segmenter':
     scheduler = torch.optim.lr_scheduler.PolynomialLR(
         optimizer, total_iters=args.num_epochs, power=0.9, last_epoch=-1, verbose=False)
     
-    with open(config.segmenter._SAVE_FOLDER + 'output.txt', 'a') as f:
-        print("".join([arg + ' : ' + str(args.__dict__[arg]) + "\n" for arg in args.__dict__]), file=f)
+    print("".join([arg + ' : ' + str(args.__dict__[arg]) + "\n" for arg in args.__dict__]))
     
 # endregion model and data init
     # train using a stochastic method
     if args.train_stochastic:
         
-        with open(config.segmenter._SAVE_FOLDER + 'output.txt', 'a') as f:
-            print('[Training with stochastic batching...]', file=f)
+        print('[Training with stochastic batching...]')
             
         model.train_fn_stochastic(
             train_dataset, val_loader, optimizer, scheduler, args.warmup_epochs)
 
     # train with standard dataloading, including shuffling        
     else:
-
-        with open(config.segmenter._SAVE_FOLDER + 'output.txt', 'a') as f:
-            print('[Training with default shuffled batching...]', file=f)
+        print('[Training with default shuffled batching...]')
             
         model.train_fn(
             train_loader, val_loader, optimizer, scheduler, args.warmup_epochs)

@@ -7,7 +7,7 @@ from hesp.util import loss
 from hesp.models.DeepLabV3Plus_Pytorch import network
 import torchmetrics
 import random
-from hesp.util.data_helpers import imshow
+# from hesp.util.data_helpers import imshow
 import os
 
 
@@ -21,29 +21,39 @@ class Segmenter(torch.nn.Module):
         self.train_metrics = config.segmenter._TRAIN_METRICS    
         self.val_metrics = config.segmenter._VAL_METRICS
         self.device = device
+        self.save_state = config.segmenter._SAVE_STATE
+        
         if self.config.dataset._NAME == 'pascal':
             i2c_file = "datasets/pascal/PASCAL_i2c.txt"
         with open(i2c_file, "r") as f:
             self.i2c = {i : line.split(":")[1][:-1] for i, line in enumerate(f.readlines()) }
+            
         if config.embedding_space._GEOMETRY == 'hyperbolic':
             self.embedding_space = HyperbolicEmbeddingSpace(tree, config)
+            
         if config.embedding_space._GEOMETRY == 'euclidean':
             self.embedding_space = EuclideanEmbeddingSpace(tree, config)
+            
         self.embedding_model = network.modeling._load_model(
             arch_type=config.base_model_name,
             backbone=config.segmenter._BACKBONE,
             num_classes=config.segmenter._EFN_OUT_DIM,
             output_stride=config.segmenter._OUTPUT_STRIDE,
             pretrained_backbone=config.segmenter._PRE_TRAINED_BB)
+        
         if self.config.segmenter._RESUME:
             print('Loading embedding model and embedding space state dicts..')
             self.embedding_space.load_state_dict(
-                torch.load(save_folder + "embedding_space.pt"), file=f)
+                torch.load(save_folder + "embedding_space.pt"))
+            
             self.embedding_model.load_state_dict(
-                torch.load(save_folder + "embedding_model.pt"), file=f)
+                torch.load(save_folder + "embedding_model.pt"))
+            
             print('Done.')
+            
         self.iou_fn = torchmetrics.classification.MulticlassJaccardIndex(
             config.dataset._NUM_CLASSES, average=None, ignore_index=255, validate_args=False)
+        
         self.acc_fn = torchmetrics.classification.MulticlassAccuracy(
             config.dataset._NUM_CLASSES, average=None,  multidim_average='global', ignore_index=255, validate_args=False)
         
@@ -75,7 +85,7 @@ class Segmenter(torch.nn.Module):
         edx = str(self.edx)
         if self.edx + 1 >= self.warmup_epochs:
             self.scheduler.step()
-        with open(self.config.segmenter._SAVE_FOLDER + 'output.txt', 'a') as f:
+        
             if self.train_metrics:
                 self.compute_metrics('train')
             if self.val_metrics:
@@ -128,18 +138,18 @@ class Segmenter(torch.nn.Module):
             # reset steps, increment epoch, take a scheduler step and update parameters
             self.end_of_epoch()
             
-        with open(self.config.segmenter._SAVE_FOLDER + 'output.txt', 'a') as f:
-           print('Training done. Saving final model state..', file=f)
+        print('Training done. Saving final model state..')
            
-        self.save_states()
+        if self.save_state:   
+            self.save_states()
     
     
     def save_states(self):
-        folder =  self.config.segmenter._SAVE_FOLDER 
-        if not os.path.exists(folder):
-            os.mkdir(folder)
-        torch.save(self.embedding_model.state_dict(), folder + 'embedding_model.pt' )
-        torch.save(self.embedding_space.state_dict(), folder + 'embedding_space.pt' )
+        save_folder =  self.config.segmenter._SAVE_FOLDER 
+        if not os.path.exists(save_folder):
+            os.mkdir(save_folder)
+        torch.save(self.embedding_model.state_dict(), save_folder + 'embedding_model.pt' )
+        torch.save(self.embedding_space.state_dict(), save_folder + 'embedding_space.pt' )
     
     
     def collate_fn(self):
@@ -171,8 +181,8 @@ class Segmenter(torch.nn.Module):
         self.global_steps = 0
         self.steps = 0
         if type(self.seed) == float:
-            with open(self.config.segmenter._SAVE_FOLDER + 'output.txt', 'a') as f:
-                print('[random seed]  ', self.seed, file=f)
+            
+            print('[random seed]  ', self.seed)
             torch.manual_seed(self.seed)
             random.seed(self.seed)
         self.init_lrs = []
@@ -229,14 +239,14 @@ class Segmenter(torch.nn.Module):
                 avg_loss = str(round(self.running_loss / (self.steps + 1), 5))
                 acc = str(round(self.acc_fn.compute().cpu().mean().item(), 5))
                 miou = str(round(self.iou_fn.compute().cpu().mean().item(), 5))
-                with open(self.config.segmenter._SAVE_FOLDER + 'output.txt', 'a') as f:
-                    print('[global step]         {}'.format(str(self.global_steps)), file=f)
-                    print('[average loss]        {}'.format(avg_loss), file=f)
-                    print('[accuracy]            {}'.format(acc), file=f)
-                    print('[miou]                {}'.format(miou), file=f)
-                    print('[normal norm dim 1]   {}'.format(normn1), file=f)
-                    print('[offset norms dim 1]  {}\n\n'.format(offsn1),  file=f)
-                                     
+                
+                print('[global step]         {}'.format(str(self.global_steps)))
+                print('[average loss]        {}'.format(avg_loss))
+                print('[accuracy]            {}'.format(acc))
+                print('[miou]                {}'.format(miou))
+                print('[normal norm dim 1]   {}'.format(normn1))
+                print('[offset norms dim 1]  {}\n\n'.format(offsn1))
+                                    
     
     def compute_metrics(self, mode):
         accuracy = self.acc_fn.compute().cpu()
@@ -249,47 +259,46 @@ class Segmenter(torch.nn.Module):
         self.acc_fn.reset()
     
     
-    def compute_metrics_dataset(self, loader: torch.utils.data.DataLoader, mode):
+    def compute_metrics_dataset(self, loader: torch.utils.data.DataLoader):
         with torch.no_grad():
             for images, labels, _ in loader:
                 self.images = images.to(self.device)
                 self.labels = labels.to(self.device).squeeze()
                 self.forward()
                 self.metrics_step()
-            self.compute_metrics(mode)
+            self.compute_metrics()
 
 
     def print_metrics(self, metrics, ncls, mode):
-        with open(self.config.segmenter._SAVE_FOLDER + 'output.txt', 'a') as f:
+        
             
             if mode == 'train':
-                print('-----------------[Training Metrics Epoch {}]-----------------'.format(self.edx), file=f)
+                print('-----------------[Training Metrics Epoch {}]-----------------'.format(self.edx))
                 
             if mode == 'val':
-                print(['-----------------[Validation Metrics Epoch {}]-----------------'.format(self.edx)], file=f)
+                print(['-----------------[Validation Metrics Epoch {}]-----------------'.format(self.edx)])
                 
-            print('\n[accuracy per class]', file=f)
+            print('\n[accuracy per class]')
             
-            self.pretty_print([(self.i2c[i], metrics['acc per class'][i].item()) for i in range(ncls) ], f)
+            self.pretty_print([(self.i2c[i], metrics['acc per class'][i].item()) for i in range(ncls) ])
             
-            print('\n[miou per class]', file=f)
+            print('\n[miou per class]')
             
-            self.pretty_print([(self.i2c[i], metrics['miou per class'][i].item()) for i in range(ncls) ], f)
+            self.pretty_print([(self.i2c[i], metrics['miou per class'][i].item()) for i in range(ncls) ])
             
             print('\n[miou]              ', metrics['miou per class'].mean().item(), 
-                  '\n[average accuracy]  ', metrics['acc per class'].mean().item(),
-                   file=f)
+                  '\n[average accuracy]  ', metrics['acc per class'].mean().item())
             
             if mode == 'train':
-                print('-----------------[End Training Metrics Epoch {}]-----------------\n\n'.format(self.edx), file=f)
+                print('-----------------[End Training Metrics Epoch {}]-----------------\n\n'.format(self.edx))
                 
             if mode == 'val':
-                print(['-----------------[End Validation Metrics Epoch {}]-----------------\n\n'.format(self.edx)], file=f)
+                print(['-----------------[End Validation Metrics Epoch {}]-----------------\n\n'.format(self.edx)])
         
         
-    def pretty_print(self, metrics_list, f):
+    def pretty_print(self, metrics_list):
         target = 15
         for label, x in metrics_list:
             offset = target - len(label)
-            print(label, " "*offset, x, file=f)
+            print(label, " "*offset, x)
             
