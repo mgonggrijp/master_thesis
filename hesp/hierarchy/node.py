@@ -12,8 +12,3 @@ class Node(object):
         self.siblings = siblings
         self.sub_hierarchy = sub_hierarchy
         self.idx = idx
-
-        # for plotting
-        self.HCL = (0., 0., 0.)
-        self.hue_range = (0., 0.)
-        self.hex = ''

@@ -7,9 +7,9 @@ import networkx as nx
 import numpy as np
 import torch
 
-from hesp.hierarchy.hierarchy_helpers import hierarchy_pos, json2rels
+# from hesp.hierarchy.hierarchy_helpers import hierarchy_pos, json2rels
 from hesp.hierarchy.node import Node
-from hesp.visualize.visualize_helpers import colour_nodes
+# from hesp.visualize.visualize_helpers import colour_nodes
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -39,9 +39,9 @@ class Tree(object):
         self.train_classes = list(self.i2n.keys())
         self.M = self.get_M()  # len(self.nodes) - 1  # excl root
         self.init_matrices()
-        self.nodes = colour_nodes(self.nodes, self.root)
-        self.init_graph()
-        self.init_metric_families()
+        # self.nodes = colour_nodes(self.nodes, self.root)
+        # self.init_graph()
+        # self.init_metric_families()
 
     def get_sibling_nodes(self, node_name):
         return [self.nodes[s] for s in self.nodes[node_name].siblings]
@@ -125,58 +125,58 @@ class Tree(object):
                 self.hmat[i] = torch.Tensor(
                     [i in chierch_idx for i in range(self.M)]).to(self.device)
 
-    def init_graph(self, ):
-        """ Initializes networkx graph, used for visualization. """
-        rels = json2rels(self.json)
-        self.G = nx.Graph()
-        self.G.add_edges_from(rels)
-        pos = hierarchy_pos(self.G, self.root, width=2 * math.pi)
-        self.pos = {
-            u: (r * math.cos(theta), r * math.sin(theta)) for u, (theta, r) in pos.items()
-        }
+    # def init_graph(self, ):
+    #     """ Initializes networkx graph, used for visualization. """
+    #     rels = json2rels(self.json)
+    #     self.G = nx.Graph()
+    #     self.G.add_edges_from(rels)
+    #     pos = hierarchy_pos(self.G, self.root, width=2 * math.pi)
+    #     self.pos = {
+    #         u: (r * math.cos(theta), r * math.sin(theta)) for u, (theta, r) in pos.items()
+    #     }
 
-    @property
-    def levels(self, ):
-        """ Returns nodes in order of depth """
-        max_depth = np.max([n.depth for _, n in self.nodes.items()])
-        stages = []
-        for i in range(max_depth):
-            stage = [n for _, n in self.nodes.items() if n.depth == i + 1]
-            stages.append(stage)
-        return stages
+    # @property
+    # def levels(self, ):
+    #     """ Returns nodes in order of depth """
+    #     max_depth = np.max([n.depth for _, n in self.nodes.items()])
+    #     stages = []
+    #     for i in range(max_depth):
+    #         stage = [n for _, n in self.nodes.items() if n.depth == i + 1]
+    #         stages.append(stage)
+    #     return stages
 
-    def is_hyponym_of(self, key, target):
-        if self.nodes[key].parent is None:
-            return False
-        if self.nodes[key].parent == target:
-            return True
-        else:
-            return self.is_hyponym_of(self.nodes[key].parent, target)
+    # def is_hyponym_of(self, key, target):
+    #     if self.nodes[key].parent is None:
+    #         return False
+    #     if self.nodes[key].parent == target:
+    #         return True
+    #     else:
+    #         return self.is_hyponym_of(self.nodes[key].parent, target)
 
-    def metric_family(self, concept):
-        node = self.nodes[concept]
-        siblings = [i for i in self.target_classes if self.is_hyponym_of(
-            self.i2c[i], node.parent)]
-        cousins = [i for i in self.target_classes if self.is_hyponym_of(
-            self.i2c[i], self.nodes[node.parent].parent)]
-        return siblings, cousins
+    # def metric_family(self, concept):
+    #     node = self.nodes[concept]
+    #     siblings = [i for i in self.target_classes if self.is_hyponym_of(
+    #         self.i2c[i], node.parent)]
+    #     cousins = [i for i in self.target_classes if self.is_hyponym_of(
+    #         self.i2c[i], self.nodes[node.parent].parent)]
+    #     return siblings, cousins
 
-    def init_metric_families(self, ):
-        for i in self.target_classes:
-            name = self.i2c[i]
-            node = self.nodes[name]
+    # def init_metric_families(self, ):
+    #     for i in self.target_classes:
+    #         name = self.i2c[i]
+    #         node = self.nodes[name]
 
-            metric_siblings, metric_cousins = self.metric_family(name)
-            if node.parent != 'root':
-                node.metric_siblings = metric_siblings
-            else:
-                # parent is root, no hierarchical relaxation as it would include all nodes
-                node.metric_siblings = [i]
-                node.metric_cousins = [i]
-                continue
+    #         metric_siblings, metric_cousins = self.metric_family(name)
+    #         if node.parent != 'root':
+    #             node.metric_siblings = metric_siblings
+    #         else:
+    #             # parent is root, no hierarchical relaxation as it would include all nodes
+    #             node.metric_siblings = [i]
+    #             node.metric_cousins = [i]
+    #             continue
 
-            if self.nodes[node.parent].parent != 'root':
-                # we know the parent is not root if we are here
-                node.metric_cousins = metric_cousins
-            else:
-                node.metric_cousins = metric_siblings
+    #         if self.nodes[node.parent].parent != 'root':
+    #             # we know the parent is not root if we are here
+    #             node.metric_cousins = metric_cousins
+    #         else:
+    #             node.metric_cousins = metric_siblings

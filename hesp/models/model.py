@@ -17,6 +17,7 @@ def model_factory(config):
     tree_params = {'i2c': config.dataset._I2C,
                    'json': json,
                    'device' : device}
+    
     class_tree = Tree(**tree_params)
      
     train_embedding_space = True

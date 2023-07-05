@@ -357,6 +357,8 @@ if args.mode == 'segmenter':
         
     model = model_factory(config=config).to(args.device)
     
+    print(model.tree.hmat, model.tree.sibmat)
+    
     model.identifier = identifier
     
     backbone_params = {"params" : model.embedding_model.backbone.parameters(), "lr" : args.slr/10}
