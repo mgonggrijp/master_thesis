@@ -221,7 +221,7 @@ class Segmenter(torch.nn.Module):
             acc = self.acc_fn.forward(preds, self.labels)
 
     
-    def print_intermediate(self, print_every=5):
+    def print_intermediate(self, print_every=50):
         if self.steps % print_every == 0 and self.steps > 0:
             with torch.no_grad():
                 offsn1 = str(round(torch.linalg.vector_norm(self.embedding_space.offsets, dim=1).mean().item(), 5))
@@ -268,11 +268,11 @@ class Segmenter(torch.nn.Module):
             if mode == 'val':
                 print(['-----------------[Validation Metrics Epoch {}]-----------------'.format(self.edx)], file=f)
                 
-            print('\n\n[accuracy per class]', file=f)
+            print('\n[accuracy per class]', file=f)
             
             self.pretty_print([(self.i2c[i], metrics['acc per class'][i].item()) for i in range(ncls) ], f)
             
-            print('\n\n[miou per class]', file=f)
+            print('\n[miou per class]', file=f)
             
             self.pretty_print([(self.i2c[i], metrics['miou per class'][i].item()) for i in range(ncls) ], f)
             
@@ -281,10 +281,10 @@ class Segmenter(torch.nn.Module):
                    file=f)
             
             if mode == 'train':
-                print('-----------------[End Training Metrics Epoch {}]-----------------'.format(self.edx), file=f)
+                print('-----------------[End Training Metrics Epoch {}]-----------------\n\n'.format(self.edx), file=f)
                 
             if mode == 'val':
-                print(['-----------------[End Validation Metrics Epoch {}]-----------------'.format(self.edx)], file=f)
+                print(['-----------------[End Validation Metrics Epoch {}]-----------------\n\n'.format(self.edx)], file=f)
         
         
     def pretty_print(self, metrics_list, f):

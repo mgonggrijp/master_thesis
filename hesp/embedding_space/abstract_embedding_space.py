@@ -60,7 +60,7 @@ class AbstractEmbeddingSpace(torch.nn.Module):
         # embed the vectors in poincareball
         proj_embs = self.project(embeddings)
         
-        if steps % 5 == 0 and steps > 0:
+        if steps % 50 == 0 and steps > 0:
             with torch.no_grad():
                 embnorms = str(round(torch.linalg.vector_norm(embeddings, dim=1).mean().item(), 5))
                 with open(self.config.segmenter._SAVE_FOLDER + 'output.txt', 'a') as f:
