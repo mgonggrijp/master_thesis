@@ -76,16 +76,10 @@ class Segmenter(torch.nn.Module):
         if self.edx + 1 >= self.warmup_epochs:
             self.scheduler.step()
         with open(self.config.segmenter._SAVE_FOLDER + 'output.txt', 'a') as f:
-                # print('[new learning rate epoch {}]'.format(edx),
-                        # self.scheduler.get_last_lr(), file=f)
-            if self.computing_metrics:
-                print('----------------[Training Metrics Epoch {}]----------------\n'.format(edx), file=f)
-                self.compute_metrics()
-                print('----------------[End Training Metrics Epoch {}]----------------\n'.format(edx), file=f)
+            if self.train_metrics:
+                self.compute_metrics('train')
             if self.val_metrics:
-                print('----------------[Validation Metrics Epoch {}]----------------\n'.format(edx), file=f)
-                self.compute_metrics_dataset(self.val_loader)
-                print('----------------[End Validation Metrics Epoch {}]----------------\n'.format(edx), file=f)
+                self.compute_metrics_dataset(self.val_loader, 'val')
 
 
     def update_model(self):
@@ -102,7 +96,7 @@ class Segmenter(torch.nn.Module):
         self.optimizer.step()
         self.optimizer.zero_grad()
         self.steps += 1
-        self.global_step += 1
+        self.global_steps += 1
        
         
     def warmup(self):
@@ -118,9 +112,8 @@ class Segmenter(torch.nn.Module):
         
         
         for edx in range(self.config.segmenter._NUM_EPOCHS):
-            self.steps = 0
             self.edx = edx
-            # if edx + 1 <= warmup_epochs take a warming up step
+            # if still in warmup epochs, take warmup steps
             self.warmup()
             for images, labels, _ in train_loader:
                 self.labels = labels.to(self.device).squeeze()
@@ -128,11 +121,11 @@ class Segmenter(torch.nn.Module):
                 # compute the class probabilities for each pixel;
                 self.forward()
                 # print intermediate metrics;
-                if self.computing_metrics:
+                if self.train_metrics:
                     self.metrics_step()
                 # compute the loss and update model parameters;
                 self.update_model()
-            # reset steps, increment epoch, take a scheduler step and 
+            # reset steps, increment epoch, take a scheduler step and update parameters
             self.end_of_epoch()
             
         with open(self.config.segmenter._SAVE_FOLDER + 'output.txt', 'a') as f:
@@ -174,9 +167,8 @@ class Segmenter(torch.nn.Module):
         self.optimizer = optimizer
         self.class_weights = torch.load("datasets/pascal/class_weights.pt").to(self.device)
         self.warmup_epochs = warmup_epochs
-        self.computing_metrics = True
         self.running_loss = 0.0
-        self.global_step = 0
+        self.global_steps = 0
         self.steps = 0
         if type(self.seed) == float:
             with open(self.config.segmenter._SAVE_FOLDER + 'output.txt', 'a') as f:
@@ -211,7 +203,7 @@ class Segmenter(torch.nn.Module):
                 # compute the class probabilities for each pixel;
                 self.forward()
                 # print intermediate metrics;
-                if self.computing_metrics:
+                if self.train_metrics:
                     self.metrics_step()
                 # compute the loss and update model parameters;
                 self.update_model()
@@ -229,66 +221,75 @@ class Segmenter(torch.nn.Module):
             acc = self.acc_fn.forward(preds, self.labels)
 
     
-    def print_intermediate(self, print_every=50):
-        
+    def print_intermediate(self, print_every=5):
         if self.steps % print_every == 0 and self.steps > 0:
             with torch.no_grad():
-                accuracy = self.acc_fn.compute().cpu().mean().item()
-                miou = self.iou_fn.compute().cpu().mean().item()
-                offset_norms_1 = torch.linalg.vector_norm(self.embedding_space.offsets, dim=1).mean().item()
-                normal_norms_1 = torch.linalg.vector_norm(self.embedding_space.normals, dim=1).mean().item()
+                offsn1 = str(round(torch.linalg.vector_norm(self.embedding_space.offsets, dim=1).mean().item(), 5))
+                normn1 = str(round(torch.linalg.vector_norm(self.embedding_space.normals, dim=1).mean().item(), 5))
+                avg_loss = str(round(self.running_loss / (self.steps + 1), 5))
+                acc = str(round(self.acc_fn.compute().cpu().mean().item(), 5))
+                miou = str(round(self.iou_fn.compute().cpu().mean().item(), 5))
                 with open(self.config.segmenter._SAVE_FOLDER + 'output.txt', 'a') as f:
-                    print('''[global step]         {} 
-                             [average loss]        {} 
-                             [accuracy]            {} 
-                             [miou]                {} 
-                             [offset norms dim 1]  {} 
-                             [normal norm dim 1]   {}\n\n''' . \
-                                 format(
-                                     round(self.global_step, 5),
-                                     round(self.running_loss / (self.steps + 1), 5),
-                                     round(accuracy, 5), round(miou, 5), round(offset_norms_1, 8),
-                                     round(normal_norms_1, 8)),
-                                 file=f )
+                    print('[global step]         {}'.format(str(self.global_steps)), file=f)
+                    print('[average loss]        {}'.format(avg_loss), file=f)
+                    print('[accuracy]            {}'.format(acc), file=f)
+                    print('[miou]                {}'.format(miou), file=f)
+                    print('[normal norm dim 1]   {}'.format(normn1), file=f)
+                    print('[offset norms dim 1]  {}\n\n'.format(offsn1),  file=f)
+                                     
     
-    
-    def compute_metrics(self):
+    def compute_metrics(self, mode):
         accuracy = self.acc_fn.compute().cpu()
         miou = self.iou_fn.compute().cpu()
         metrics = {'acc per class' : accuracy,
                    'miou per class' : miou}
         ncls = accuracy.size(0)
-        self.print_metrics(metrics, ncls)
+        self.print_metrics(metrics, ncls, mode)
         self.iou_fn.reset()
         self.acc_fn.reset()
     
     
-    def compute_metrics_dataset(self, loader: torch.utils.data.DataLoader):
+    def compute_metrics_dataset(self, loader: torch.utils.data.DataLoader, mode):
         with torch.no_grad():
             for images, labels, _ in loader:
                 self.images = images.to(self.device)
                 self.labels = labels.to(self.device).squeeze()
                 self.forward()
                 self.metrics_step()
-            self.compute_metrics()
+            self.compute_metrics(mode)
 
 
-    def print_metrics(self, metrics, ncls):
-        # print('\n\n[accuracy per class]')
-        # self.pretty_print([(self.i2c[i], metrics['acc per class'][i].item()) for i in range(ncls) ])
-        # print('\n\n[miou per class]')
-        # self.pretty_print([(self.i2c[i], metrics['miou per class'][i].item()) for i in range(ncls) ])
+    def print_metrics(self, metrics, ncls, mode):
         with open(self.config.segmenter._SAVE_FOLDER + 'output.txt', 'a') as f:
-            print('\n\n[global step]       ', self.global_step,
-                    '\n[miou]              ', metrics['miou per class'].mean().item(), 
-                    '\n[average accuracy]  ', metrics['acc per class'].mean().item(),
-                    file=f) 
+            
+            if mode == 'train':
+                print('-----------------[Training Metrics Epoch {}]-----------------'.format(self.edx), file=f)
+                
+            if mode == 'val':
+                print(['-----------------[Validation Metrics Epoch {}]-----------------'.format(self.edx)], file=f)
+                
+            print('\n\n[accuracy per class]', file=f)
+            
+            self.pretty_print([(self.i2c[i], metrics['acc per class'][i].item()) for i in range(ncls) ], f)
+            
+            print('\n\n[miou per class]', file=f)
+            
+            self.pretty_print([(self.i2c[i], metrics['miou per class'][i].item()) for i in range(ncls) ], f)
+            
+            print('\n[miou]              ', metrics['miou per class'].mean().item(), 
+                  '\n[average accuracy]  ', metrics['acc per class'].mean().item(),
+                   file=f)
+            
+            if mode == 'train':
+                print('-----------------[End Training Metrics Epoch {}]-----------------'.format(self.edx), file=f)
+                
+            if mode == 'val':
+                print(['-----------------[End Validation Metrics Epoch {}]-----------------'.format(self.edx)], file=f)
         
         
-    def pretty_print(self, metrics_list):
+    def pretty_print(self, metrics_list, f):
         target = 15
         for label, x in metrics_list:
             offset = target - len(label)
-            with open(self.config.segmenter._SAVE_FOLDER + 'output.txt', 'a') as f:
-                print(label, " "*offset, x, file=f)
+            print(label, " "*offset, x, file=f)
             

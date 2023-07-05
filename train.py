@@ -393,6 +393,6 @@ if args.mode == 'segmenter':
         with open(config.segmenter._SAVE_FOLDER + 'output.txt', 'a') as f:
             print('[Training with default shuffled batching...]', file=f)
             
-        model.train_fn_(
+        model.train_fn(
             train_loader, val_loader, optimizer, scheduler, args.warmup_epochs)
 
