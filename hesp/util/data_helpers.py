@@ -16,7 +16,9 @@ import numpy as np
 import torchvision.transforms.functional as TF
 import matplotlib.pyplot as plt
 
-ROOT = "/home/mgonggri/master_thesis/"
+with open("root_folder.txt", "r") as f:
+    lines = f.readlines()
+    ROOT = lines[0]
 
 
 # change depending on where the folder is located

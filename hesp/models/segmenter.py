@@ -10,7 +10,9 @@ import random
 # from hesp.util.data_helpers import imshow
 import os
 
-ROOT = "/home/mgonggri/master_thesis/"
+with open("root_folder.txt", "r") as f:
+    lines = f.readlines()
+    ROOT = lines[0]
 
 class Segmenter(torch.nn.Module):
     def __init__(self, tree: Tree, config: Config, device, save_folder: str = "saves/", seed: float = None):
@@ -89,6 +91,7 @@ class Segmenter(torch.nn.Module):
         self.running_loss = 0.0
         
         if self.edx + 1 >= self.warmup_epochs:
+            print('DOING REGULAR SCHEDULE')
             self.scheduler.step()
             
         if self.train_metrics:
@@ -125,7 +128,8 @@ class Segmenter(torch.nn.Module):
     def warmup(self):
         """ Basic linear warmup scheduling. """
          # warmup schedule
-        if self.edx < self.warmup_epochs: 
+        if self.edx < self.warmup_epochs:
+            print('DOING WARMUP')
             for i, param_group in enumerate(self.optimizer.param_groups):
                     param_group['lr'] = self.init_lrs[i] * (self.edx + 1) / self.warmup_epochs
      
@@ -137,7 +141,7 @@ class Segmenter(torch.nn.Module):
         for edx in range(self.start_edx, self.config.segmenter._NUM_EPOCHS + self.start_edx, 1):
             self.edx = edx
             # if still in warmup epochs, take warmup steps
-            self.warmzup()
+            self.warmup()
             for images, labels, _ in train_loader:
                 self.labels = labels.to(self.device).squeeze()
                 self.images = images.to(self.device)
@@ -151,13 +155,16 @@ class Segmenter(torch.nn.Module):
             # reset steps, increment epoch, take a scheduler step and update parameters
             self.end_of_epoch()
             
-        print('Training done. Saving final model state..')
            
-        if self.save_state: self.save_states()
+        if self.save_state:
+            self.save_states()
+            print('Training done. Saving final model state..')
     
-    
+
     def save_states(self):
         save_folder =  self.config.segmenter._SAVE_FOLDER 
+        
+        print(save_folder)
         
         if not os.path.exists(save_folder): os.mkdir(save_folder)
             
@@ -167,8 +174,7 @@ class Segmenter(torch.nn.Module):
         torch.save(self.optimizer.state_dict(), save_folder + 'optimizer.pt')
         
         with open(save_folder + 'epoch.txt', 'w') as f:
-            f.write(str(self.edx))
-            f.write(str(self.global_steps))
+            f.write(str(self.edx + 1) +  '\n' + str(self.global_steps))
             
     def collate_fn(self):
         """ Given a dataset and a list of indeces return a batch of samples.

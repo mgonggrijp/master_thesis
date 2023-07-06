@@ -8,7 +8,9 @@ import geoopt
 import os
 
 # change according to your system
-ROOT = "/home/mgonggri/master_thesis/"
+with open("root_folder.txt", "r") as f:
+    lines = f.readlines()
+    ROOT = lines[0]
 
 torch.set_printoptions(threshold=float('inf'))
 torch.set_printoptions(sci_mode=False)
