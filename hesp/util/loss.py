@@ -53,6 +53,6 @@ def CCE(cprobs: torch.Tensor, labels: torch.Tensor, tree: Tree, class_weights: t
     # collect the probabilities that correspond to the labels
     pos_logp = gather(input=log_sum_p, index=labels[:, None], dim=1).squeeze()
     # reweight the log probs with the class weights to balance class frequency differences 
-    class_weighted_pos_logp = pos_logp * class_weights[labels]    
+    class_weighted_pos_logp = pos_logp * class_weights[labels] * 10.0  # rescale to adjust for class weights
     # loss is then the -mean( correct(log probs) )
     return -class_weighted_pos_logp.mean()

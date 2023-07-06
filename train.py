@@ -7,7 +7,8 @@ from hesp.util import data_helpers
 import geoopt
 import os
 
-ROOT = "~/home/mgonggri/master_thesis/saves"
+# change according to your system
+ROOT = "/home/mgonggri/master_thesis/"
 
 torch.set_printoptions(threshold=float('inf'))
 torch.set_printoptions(sci_mode=False)
@@ -273,6 +274,7 @@ config = Config(
 
 config.appendix = args.id
 
+config._ROOT = ROOT
 
 if not args.mode:
     raise ValueError
@@ -332,9 +334,9 @@ if args.mode == 'segmenter':
 # endregion identifier
 
 
-# region model and data init
-    means = torch.load("datasets/" + args.dataset + "/means.pt")
+# region model and data ini
     
+    means = torch.load(ROOT + "datasets/" + args.dataset + "/means.pt")
     train_files, val_files = data_helpers.make_data_splits(
         args.dataset,
         limit=args.data_limit,

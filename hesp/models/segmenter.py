@@ -10,6 +10,7 @@ import random
 # from hesp.util.data_helpers import imshow
 import os
 
+ROOT = "/home/mgonggri/master_thesis/"
 
 class Segmenter(torch.nn.Module):
     def __init__(self, tree: Tree, config: Config, device, save_folder: str = "saves/", seed: float = None):
@@ -24,7 +25,7 @@ class Segmenter(torch.nn.Module):
         self.save_state = config.segmenter._SAVE_STATE
         
         if self.config.dataset._NAME == 'pascal':
-            i2c_file = "datasets/pascal/PASCAL_i2c.txt"
+            i2c_file = config._ROOT + "datasets/pascal/PASCAL_i2c.txt"
         with open(i2c_file, "r") as f:
             self.i2c = {i : line.split(":")[1][:-1] for i, line in enumerate(f.readlines()) }
             
@@ -80,16 +81,28 @@ class Segmenter(torch.nn.Module):
 
     
     def end_of_epoch(self):
+        print( '[average train sample embedding norms]  {}'.format(
+            str(self.embedding_space.running_norms / self.steps)) )
+        
+        self.embedding_space.running_norms = 0.0
         self.steps = 0
-        self.running_loss = 0.
-        edx = str(self.edx)
+        self.running_loss = 0.0
+        
         if self.edx + 1 >= self.warmup_epochs:
             self.scheduler.step()
+            
+        if self.train_metrics:
+            self.compute_metrics('train')
+            
+        if self.val_metrics:
+            self.compute_metrics_dataset(self.val_loader, 'val')
         
-            if self.train_metrics:
-                self.compute_metrics('train')
-            if self.val_metrics:
-                self.compute_metrics_dataset(self.val_loader, 'val')
+        print( '[average val sample embedding norms]    {}'.format(
+            str(self.embedding_space.running_norms / self.steps)) )
+        
+        self.embedding_space.running_norms = 0.0
+        self.steps = 0
+        
 
 
     def update_model(self):
@@ -98,7 +111,7 @@ class Segmenter(torch.nn.Module):
         valid_labels = self.labels[valid_mask]
         hce_loss = loss.CCE(valid_cprobs, valid_labels, self.tree, self.class_weights)
         self.running_loss += hce_loss.item()
-        self.print_intermediate()
+        # self.print_intermediate()
         torch.nn.utils.clip_grad_norm_(
             self.embedding_space.offsets,
             self.config.segmenter._GRAD_CLIP)
@@ -121,10 +134,10 @@ class Segmenter(torch.nn.Module):
         self.init_training_states(train_loader, val_loader, optimizer, scheduler, warmup_epochs)
         
         
-        for edx in range(self.config.segmenter._NUM_EPOCHS):
+        for edx in range(self.start_edx, self.config.segmenter._NUM_EPOCHS + self.start_edx, 1):
             self.edx = edx
             # if still in warmup epochs, take warmup steps
-            self.warmup()
+            self.warmzup()
             for images, labels, _ in train_loader:
                 self.labels = labels.to(self.device).squeeze()
                 self.images = images.to(self.device)
@@ -140,18 +153,23 @@ class Segmenter(torch.nn.Module):
             
         print('Training done. Saving final model state..')
            
-        if self.save_state:   
-            self.save_states()
+        if self.save_state: self.save_states()
     
     
     def save_states(self):
         save_folder =  self.config.segmenter._SAVE_FOLDER 
-        if not os.path.exists(save_folder):
-            os.mkdir(save_folder)
+        
+        if not os.path.exists(save_folder): os.mkdir(save_folder)
+            
         torch.save(self.embedding_model.state_dict(), save_folder + 'embedding_model.pt' )
         torch.save(self.embedding_space.state_dict(), save_folder + 'embedding_space.pt' )
-    
-    
+        torch.save(self.scheduler.state_dict(), save_folder + 'scheduler.pt')
+        torch.save(self.optimizer.state_dict(), save_folder + 'optimizer.pt')
+        
+        with open(save_folder + 'epoch.txt', 'w') as f:
+            f.write(str(self.edx))
+            f.write(str(self.global_steps))
+            
     def collate_fn(self):
         """ Given a dataset and a list of indeces return a batch of samples.
         Returns a tuple of (batch_samples, batch_labels) """
@@ -175,26 +193,41 @@ class Segmenter(torch.nn.Module):
         self.val_loader = val_loader
         self.scheduler = scheduler
         self.optimizer = optimizer
-        self.class_weights = torch.load("datasets/pascal/class_weights.pt").to(self.device)
+        self.class_weights = torch.load(ROOT + "datasets/pascal/class_weights.pt").to(self.device)
         self.warmup_epochs = warmup_epochs
         self.running_loss = 0.0
         self.global_steps = 0
         self.steps = 0
         if type(self.seed) == float:
-            
             print('[random seed]  ', self.seed)
             torch.manual_seed(self.seed)
             random.seed(self.seed)
         self.init_lrs = []
         for param_group in self.optimizer.param_groups:
             self.init_lrs.append(param_group['lr'])
+        
+        if self.config.segmenter._RESUME:
+            with open(self.save_folder + 'epoch.txt', 'r') as f:
+                lines  = f.readlines()
+                self.start_edx = int(lines[0])
+                self.global_steps = int(lines[1])
+                
+            self.scheduler.load_state_dict(
+                torch.load(self.save_folder + 'scheduler.pt'))
+            
+            self.optimizer.load_state_dict(
+                torch.load(self.save_folder + 'optimizer.pt'))
+            
+        else:
+            self.start_edx = 0 
     
     
     def train_fn_stochastic(self, train_dataset, val_loader, optimizer, scheduler, warmup_epochs):
         """ Probabilistic training loop that draws sample indeces from a multinomial distribtution. """
         self.init_training_states(train_dataset, val_loader, optimizer, scheduler, warmup_epochs)
         torch.set_printoptions(sci_mode=False)
-        for edx in range(self.config.segmenter._NUM_EPOCHS):
+        
+        for edx in range(self.start_edx, self.config.segmenter._NUM_EPOCHS, 1):
             self.edx = edx
             # generate all sample indeces for this epoch; allow for doubles
             indeces = torch.multinomial(self.sample_probs, self.num_samples, replacement=True)
@@ -227,8 +260,8 @@ class Segmenter(torch.nn.Module):
         with torch.no_grad():
             joints = self.embedding_space.get_joints(self.cprobs)
             preds = self.embedding_space.decide(joints)
-            iou = self.iou_fn.forward(preds, self.labels)
-            acc = self.acc_fn.forward(preds, self.labels)
+            self.iou_fn.forward(preds, self.labels)
+            self.acc_fn.forward(preds, self.labels)
 
     
     def print_intermediate(self, print_every=50):
@@ -259,19 +292,20 @@ class Segmenter(torch.nn.Module):
         self.acc_fn.reset()
     
     
-    def compute_metrics_dataset(self, loader: torch.utils.data.DataLoader):
+    def compute_metrics_dataset(self, loader: torch.utils.data.DataLoader, mode):
         with torch.no_grad():
+            # steps are used to compute embedding norms every 15 steps
+            self.steps = 0
             for images, labels, _ in loader:
                 self.images = images.to(self.device)
                 self.labels = labels.to(self.device).squeeze()
                 self.forward()
+                self.steps += 1
                 self.metrics_step()
-            self.compute_metrics()
+            self.compute_metrics(mode)
 
 
     def print_metrics(self, metrics, ncls, mode):
-        
-            
             if mode == 'train':
                 print('-----------------[Training Metrics Epoch {}]-----------------'.format(self.edx))
                 
@@ -286,8 +320,11 @@ class Segmenter(torch.nn.Module):
             
             self.pretty_print([(self.i2c[i], metrics['miou per class'][i].item()) for i in range(ncls) ])
             
-            print('\n[miou]              ', metrics['miou per class'].mean().item(), 
-                  '\n[average accuracy]  ', metrics['acc per class'].mean().item())
+            print('[{} miou]     {}'.format(
+                mode, metrics['miou per class'].mean().item()))
+            
+            print('[{} accuracy] {}'.format(
+                mode, metrics['acc per class'].mean().item()))
             
             if mode == 'train':
                 print('-----------------[End Training Metrics Epoch {}]-----------------\n\n'.format(self.edx))

@@ -1,0 +1,17 @@
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
+slurmstepd: error: *** JOB 3024303 ON gcn33 CANCELLED AT 2023-07-06T06:27:49 DUE TO TIME LIMIT ***
+slurmstepd: error: *** STEP 3024303.0 ON gcn33 CANCELLED AT 2023-07-06T06:27:49 DUE TO TIME LIMIT ***
+
+JOB STATISTICS
+==============
+Job ID: 3024303
+Cluster: snellius
+User/Group: mgonggri/mgonggri
+State: TIMEOUT (exit code 0)
+Nodes: 1
+Cores per node: 18
+CPU Utilized: 22:14:16
+CPU Efficiency: 12.35% of 7-12:00:36 core-walltime
+Job Wall-clock time: 10:00:02
+Memory Utilized: 48.88 GB
+Memory Efficiency: 0.00% of 0.00 MB

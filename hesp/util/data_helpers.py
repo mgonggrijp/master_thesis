@@ -16,9 +16,12 @@ import numpy as np
 import torchvision.transforms.functional as TF
 import matplotlib.pyplot as plt
 
+ROOT = "/home/mgonggri/master_thesis/"
+
+
 # change depending on where the folder is located
-PASCAL_ROOT = "datasets/pascal/data/"
-COCO_ROOT = "datasets/coco/data/"
+PASCAL_ROOT = ROOT + "datasets/pascal/data/"
+COCO_ROOT = ROOT + "datasets/coco/data/"
 
 def imshow(images, labels):
     for i, (img, lab) in enumerate( zip(images, labels) ):
@@ -285,7 +288,7 @@ def make_torch_loader(dataset, files, config, mode='val'):
                 scale=(config.segmenter._MIN_SCALE, config.segmenter._MAX_SCALE))
         
         
-    dataset.means = torch.load('datasets/pascal/means.pt')
+    dataset.means = torch.load(ROOT + 'datasets/pascal/means.pt')
     dataset.use_transforms = True
     
     if mode == 'train':
