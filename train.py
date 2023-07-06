@@ -1,10 +1,9 @@
-import argparse
 import torch
 from hesp.config.config import Config
-from hesp.config.dataset_config import DATASET_CFG_DICT
 from hesp.models.model import model_factory
 from hesp.util import data_helpers
 import geoopt
+from train_args import args
 
 CYCLIC = True
 
@@ -16,256 +15,12 @@ with open("root_folder.txt", "r") as f:
 torch.set_printoptions(threshold=float('inf'))
 torch.set_printoptions(sci_mode=False)
 
-# region argparse
-parser = argparse.ArgumentParser(
-    description="Train models."
-)
-
-parser.add_argument(
-    '--mode',
-    type=str,
-    choices=['segmenter'],
-    default='segmenter',
-    help="Whether to train a segmenter."
-)
-
-
-parser.add_argument(
-    '--save_state',
-    action='store_true',
-    default=False,
-    help='Whether to save the final model states.'
-)
-
-
-parser.add_argument(
-    '--train_metrics',
-    action='store_true',
-    default=False,
-    help='Wether or not to record the metrics for the training data during training.'
-)
-
-parser.add_argument(
-    '--train_stochastic',
-    action='store_true',
-    default=False,
-    help='If to use stochastic training.'
-)
-
-parser.add_argument(
-    '--data_limit',
-    default=-1,
-    type=int,
-    help='Maxmimum number of samples that can be used. For memory preservation.'
-)
-
-parser.add_argument(
-    '--warmup_epochs',
-    default=5,
-    type=int,
-    help="The number of warmup epochs. \
-         Linearly increases warmup from [1 / warmup_epochs * slr] to [slr]. "
-)
-
-parser.add_argument(
-    '--val_metrics',
-    action='store_true',
-    default=True,
-    help='Wether or not to record the metrics for the validation data during training.'
-)
-
-parser.add_argument(
-    '--base_model',
-    type=str,
-    choices=['deeplabv3plus'],
-    default='deeplabv3plus',
-    help="Choose the base model for the embedding function."
-)
-
-parser.add_argument(
-    '--resume',
-    action='store_true'
-)
-
-parser.add_argument(
-    "--dataset",
-    type=str,
-    choices=DATASET_CFG_DICT.keys(),
-    help="Which dataset to use",
-    default='pascal',
-)
-
-parser.add_argument(
-    "--geometry",
-    type=str,
-    choices=['euclidean', 'hyperbolic'],
-    help="Type of geometry to use",
-    default="hyperbolic",
-)
-
-parser.add_argument(
-    "--dim",
-    type=int,
-    help="Dimensionality of embedding space.",
-    default=256,
-)
-
-parser.add_argument(
-    "--c",
-    type=float,
-    help="Initial curvature of hyperbolic space",
-    default=1.,
-)
-
-parser.add_argument(
-    "--seed",
-    type=float,
-    default=None,
-)
-
-parser.add_argument(
-    "--flat",
-    action='store_true',
-    help="Disables hierarchical structure when set.",
-)
-
-parser.add_argument(
-    "--freeze_bb",
-    action='store_true',
-    help="Freeze backbone.",
-)
-
-parser.add_argument(
-    "--freeze_bn",
-    action='store_true',
-    help="Freeze batch normalization.",
-)
-
-parser.add_argument(
-    "--batch_size",
-    default=5,
-    type=int,
-    help="Batch size."
-)
-
-parser.add_argument(
-    "--num_epochs",
-    default=1,
-    type=int,
-    help="Number of epochs to train."
-)
-
-parser.add_argument(
-    "--device",
-    type=str,
-    default='cuda:0',
-    choices=['cpu', 'cuda:0'],
-    help="Which device to use."
-)
-
-parser.add_argument(
-    "--slr",
-    default=0.01,
-    type=float,
-    help="Initial learning rate."
-)
-
-parser.add_argument(
-    "--backbone",
-    choices=['resnet101', 'resnet50'],
-    default='resnet101',
-    help="Backbone architecture."
-)
-
-parser.add_argument(
-    "--output_stride",
-    type=int,
-    choices=[8, 16],
-    default=16,
-    help="Backbone output stride."
-)
-
-parser.add_argument(
-    "--gpu",
-    type=int,
-    default=0,
-    help="Which GPU to use, in case of multi-gpu system and parallel training."
-)
-
-parser.add_argument(
-    "--base_save_dir",
-    type=str,
-    default="saves",
-    help="base dir used for saving models and training states."
-)
-
-parser.add_argument(
-    "--segmenter_dir",
-    type=str,
-    default="segmenter_experiments",
-    help="prefix of the directory the experiments are going to be saved."
-)
-
-parser.add_argument(
-    "--zero_label",
-    action='store_true',
-    help='whether do zero label training.'
-)
-
-parser.add_argument(
-    "--test_zero_label",
-    action='store_true',
-    help='whether to perform zero label testing.'
-)
-
-parser.add_argument(
-    "--train",
-    action='store_true',
-    default=False,
-    help='whether to perform testing after training.'
-)
-
-parser.add_argument(
-    "--val",
-    action='store_true',
-    default=False,
-    help='whether to perform validation after training.'
-)
-
-parser.add_argument(
-    "--id",
-    type=str,
-    default="",
-    help="Optional identifier for run"
-)
-
-parser.add_argument(
-    "--json_name",
-    type=str,
-    default="",
-    help="Needed When using ADE20K dataset. Select the hierarchy you want to use."
-)
-
-parser.add_argument(
-    "--pre_trained_bb",
-    action='store_true',
-    default=True,
-    help="If you want to use the latest pretrained backbone weights"
-)
-
-parser.add_argument(
-    "--precision",
-    default=32,
-    type=str,
-)
-
-args = parser.parse_args()
-
 if args.precision == '32':
     torch.set_default_dtype(torch.float32)
     
 if args.precision == '64':   
     torch.set_default_dtype(torch.float64)   
+
 
 config = Config(
     dataset=args.dataset,
@@ -287,7 +42,6 @@ config.embedding_space._DIM = args.dim
 config.embedding_space._INIT_CURVATURE = args.c
 config.embedding_space._HIERARCHICAL = not args.flat
 config.base_model_name = args.base_model
-# endregion argparse
 
 # region segmenter initialization
 if args.mode == 'segmenter':
@@ -296,7 +50,6 @@ if args.mode == 'segmenter':
     config.segmenter._BATCH_SIZE = args.batch_size
     config.segmenter._FREEZE_BACKBONE = args.freeze_bb
     config.segmenter._FREEZE_BN = args.freeze_bn
-    config.segmenter._ZERO_LABEL = args.zero_label 
     config.segmenter._SEGMENTER_DIR = args.segmenter_dir
     config.segmenter._DEVICE = args.device
     config.segmenter._PRE_TRAINED_BB = args.pre_trained_bb
@@ -370,18 +123,20 @@ if args.mode == 'segmenter':
     emb_space_params = {"params" : model.embedding_space.parameters(), "lr" : args.slr}
     parameters = [backbone_params, classifier_params, emb_space_params]    
 
-    optimizer = geoopt.optim.RiemannianAdam(
+    optimizer = geoopt.optim.RiemannianSGD(
         parameters,
         lr=args.slr,
-        # momentum=config.segmenter._MOMENTUM,
+        momentum=config.segmenter._MOMENTUM,
         weight_decay=config.segmenter._WEIGHT_DECAY,
         stabilize=1)
     
+    model.config.segmenter._CYCLIC = CYCLIC
+    
     if CYCLIC:
-        torch.optim.lr_scheduler.CyclicLR(
+        scheduler = torch.optim.lr_scheduler.CyclicLR(
             optimizer,
-            0.0001,
-            0.001, 
+            args.slr,
+            args.slr * 10, 
             step_size_up=2000,
             step_size_down=None,
             mode='triangular', 
@@ -391,7 +146,7 @@ if args.mode == 'segmenter':
             cycle_momentum=True, 
             base_momentum=0.8, 
             max_momentum=0.9,
-            last_epoch=- 1, 
+            last_epoch=-1, 
             verbose=False)
     else:
         scheduler = torch.optim.lr_scheduler.PolynomialLR(

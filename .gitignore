@@ -184,3 +184,9 @@ VOCdevkit/
 VOC2012/
 
 root_folder.txt
+
+.out
+
+Poincare_hesp.egg-info/
+
+visualize/

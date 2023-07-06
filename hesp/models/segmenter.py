@@ -111,7 +111,8 @@ class Segmenter(torch.nn.Module):
         self.steps = 0
         self.running_loss = 0.0
         
-        if self.edx + 1 >= self.warmup_epochs:
+        if self.edx + 1 >= self.warmup_epochs and not self.config.segmenter._CYCLIC:
+            print('scheduler step...')
             self.scheduler.step()
             
         if self.train_metrics:
@@ -125,28 +126,9 @@ class Segmenter(torch.nn.Module):
         
         self.embedding_space.running_norms = 0.0
         self.steps = 0
+
         
 
-
-
-    def update_model(self):
-        valid_mask = self.labels <= self.tree.M - 1
-        valid_cprobs = self.cprobs.moveaxis(1, -1)[valid_mask]
-        valid_labels = self.labels[valid_mask]
-        hce_loss = loss.CCE(valid_cprobs, valid_labels, self.tree, self.class_weights)
-        self.running_loss += hce_loss.item()
-        self.print_intermediate()
-        torch.nn.utils.clip_grad_norm_(
-            self.embedding_space.offsets,
-            self.config.segmenter._GRAD_CLIP)
-        hce_loss.backward()
-        self.optimizer.step()
-        self.optimizer.zero_grad()
-        self.steps += 1
-        self.global_steps += 1
-        
-        
-        
         
     def update_model(self):
         """ Compute the loss based on the probs and labels. Clip grads, loss backwards and optimizer step. """
@@ -177,10 +159,12 @@ class Segmenter(torch.nn.Module):
         
     def warmup(self):
         """ Basic linear warmup scheduling. """
+        print("warmup step...")
         
-        if self.edx < self.warmup_epochs:
-            for i, param_group in enumerate(self.optimizer.param_groups):
-                    param_group['lr'] = self.init_lrs[i] * (self.edx + 1) / self.warmup_epochs
+        for i, param_group in enumerate(self.optimizer.param_groups):
+                param_group['lr'] = self.init_lrs[i] * (self.edx + 1) / self.warmup_epochs
+                print(param_group['lr'])    
+                
      
      
             
@@ -193,7 +177,8 @@ class Segmenter(torch.nn.Module):
             self.edx = edx
             
             # if still in warmup epochs, take warmup steps
-            self.warmup()
+            if self.edx < self.warmup_epochs:
+                self.warmup()
             
             for images, labels, _ in train_loader:
                 self.labels = labels.to(self.device).squeeze()
@@ -202,12 +187,16 @@ class Segmenter(torch.nn.Module):
                 # compute the class probabilities for each pixel
                 self.forward()
                 
+                # compute the loss and update model parameters
+                self.update_model()
+                
+                 # when using cyclic learning rate scheduling
+                if self.config.segmenter._CYCLIC:
+                    self.scheduler.step()  
+                
                 # print intermediate metrics
                 if self.train_metrics:
                     self.metrics_step()
-                    
-                # compute the loss and update model parameters
-                self.update_model()
                 
             # reset steps, increment epoch, take a scheduler step, and update parameters
             self.end_of_epoch()
