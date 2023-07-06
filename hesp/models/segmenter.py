@@ -114,7 +114,7 @@ class Segmenter(torch.nn.Module):
         valid_labels = self.labels[valid_mask]
         hce_loss = loss.CCE(valid_cprobs, valid_labels, self.tree, self.class_weights)
         self.running_loss += hce_loss.item()
-        # self.print_intermediate()
+        self.print_intermediate()
         torch.nn.utils.clip_grad_norm_(
             self.embedding_space.offsets,
             self.config.segmenter._GRAD_CLIP)
