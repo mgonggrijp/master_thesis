@@ -5,7 +5,8 @@ from hesp.config.dataset_config import DATASET_CFG_DICT
 from hesp.models.model import model_factory
 from hesp.util import data_helpers
 import geoopt
-import os
+
+CYCLIC = True
 
 # change according to your system
 with open("root_folder.txt", "r") as f:
@@ -260,7 +261,6 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-
 if args.precision == '32':
     torch.set_default_dtype(torch.float32)
     
@@ -289,7 +289,6 @@ config.embedding_space._HIERARCHICAL = not args.flat
 config.base_model_name = args.base_model
 # endregion argparse
 
-
 # region segmenter initialization
 if args.mode == 'segmenter':
     config.segmenter._OUTPUT_STRIDE = args.output_stride
@@ -310,7 +309,6 @@ if args.mode == 'segmenter':
     config.segmenter._TRAIN_STOCHASTIC = args.train_stochastic
     config.segmenter._SAVE_STATE = args.save_state
     
-
     if not args.num_epochs:
         config.segmenter._NUM_EPOCHS = config.dataset._NUM_EPOCHS
     else:
@@ -321,7 +319,6 @@ if args.mode == 'segmenter':
     config.segmenter._EFN_OUT_DIM = args.dim
 
     # endregion
-
 
 # region identifier
     identifier = ""
@@ -335,9 +332,7 @@ if args.mode == 'segmenter':
     config.segmenter._SAVE_FOLDER = ROOT + "saves/" + identifier + "/"
 # endregion identifier
 
-
 # region model and data ini
-    
     means = torch.load(ROOT + "datasets/" + args.dataset + "/means.pt")
     train_files, val_files = data_helpers.make_data_splits(
         args.dataset,
@@ -381,9 +376,26 @@ if args.mode == 'segmenter':
         # momentum=config.segmenter._MOMENTUM,
         weight_decay=config.segmenter._WEIGHT_DECAY,
         stabilize=1)
-
-    scheduler = torch.optim.lr_scheduler.PolynomialLR(
-        optimizer, total_iters=args.num_epochs, power=0.9, last_epoch=-1, verbose=False)
+    
+    if CYCLIC:
+        torch.optim.lr_scheduler.CyclicLR(
+            optimizer,
+            0.0001,
+            0.001, 
+            step_size_up=2000,
+            step_size_down=None,
+            mode='triangular', 
+            gamma=1.0, 
+            scale_fn=None, 
+            scale_mode='cycle', 
+            cycle_momentum=True, 
+            base_momentum=0.8, 
+            max_momentum=0.9,
+            last_epoch=- 1, 
+            verbose=False)
+    else:
+        scheduler = torch.optim.lr_scheduler.PolynomialLR(
+            optimizer, total_iters=args.num_epochs, power=0.9, last_epoch=-1, verbose=False)     
     
     print("".join([arg + ' : ' + str(args.__dict__[arg]) + "\n" for arg in args.__dict__]))
     

@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 class AbstractEmbeddingSpace(torch.nn.Module):
     def __init__(self, tree: Tree, config: Config):
+        
         super().__init__()
 
         self.tree = tree
@@ -34,8 +35,7 @@ class AbstractEmbeddingSpace(torch.nn.Module):
         
         if config.embedding_space._GEOMETRY == 'hyperbolic':
             
-            pcb = geoopt.manifolds.PoincareBall(
-                c=config.embedding_space._INIT_CURVATURE)
+            pcb = geoopt.manifolds.PoincareBall(config.embedding_space._INIT_CURVATURE)
             
             self.offsets = geoopt.ManifoldParameter(
                             torch.normal(0.0, std_offsets),
@@ -48,15 +48,17 @@ class AbstractEmbeddingSpace(torch.nn.Module):
             
 
     def forward(self, embeddings: torch.Tensor, steps):
-        """ Given a set of vectors embedded in Euclidean space,
-            compute the conditional probabilities for each of these. 
+        """ 
+        Given a set of vectors embedded in Euclidean space,
+        compute the conditional probabilities for each of these. 
+        
+        args:
+            x -> sh (batch, dim, height, width) set of dim sized vectors
             
-            args:
-                x: sh (batch, dim, height, width) set of dim sized vectors
-                
-            returns
-                cprobs: sh (batch, nclasses, height, width) conditional probability
-                        for each class given each embedding. """
+        returns:
+            cprobs -> sh (batch, nclasses, height, width) conditional probability
+            for each class given each embedding. 
+        """
         
         # embed the vectors in poincareball
         proj_embs = self.project(embeddings)
@@ -73,14 +75,12 @@ class AbstractEmbeddingSpace(torch.nn.Module):
 
     def softmax(self, logits):
 
-        # subtract the max value for numerical safety
         safe_logits = logits - torch.amax(logits, 1, keepdim=True) # sh (batch, num_nodes, height, width)
      
         exp_logits = torch.exp(safe_logits)
 
         # matmul with sibmat to compute the sums over siblings for the normalizer Z
-        Z = torch.tensordot(
-            exp_logits, self.tree.sibmat, dims=[[1], [-1]])  # sh (batch, height, width, num_nodes)
+        Z = torch.tensordot(exp_logits, self.tree.sibmat, dims=[[1], [-1]])  # sh (batch, height, width, num_nodes)
         
         # reshape back to (batch, num_nodes, height, width)
         Z_reshaped = torch.moveaxis(Z, -1, 1)  
@@ -114,10 +114,10 @@ class AbstractEmbeddingSpace(torch.nn.Module):
         """ Calculates (joint) probabilities for incoming embeddings. Assumes embeddings are already on manifold. """
 
         logits = self.logits(
-            embeddings=embeddings,
-            offsets=self.offsets,
-            normals=self.normals,
-            curvature=self.curvature)  # shape (B, M, H, W)
+            embeddings,
+            self.offsets,
+            self.normals,
+            self.curvature)  # shape (B, M, H, W)
 
         cond_probs = self.softmax(logits)  # shape (B, M , H, W)
         

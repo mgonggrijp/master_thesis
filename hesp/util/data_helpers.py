@@ -25,32 +25,20 @@ with open("root_folder.txt", "r") as f:
 PASCAL_ROOT = ROOT + "datasets/pascal/data/"
 COCO_ROOT = ROOT + "datasets/coco/data/"
 
-def imshow(images, labels):
+def imshow(images, labels, save_folder):
     for i, (img, lab) in enumerate( zip(images, labels) ):
         img = img.moveaxis(0, -1).numpy()
         lab = lab.squeeze().numpy()
-        plt.imshow(img); # plt.savefig('img_{}.png'.format(i)); plt.close()
+        
+        plt.imshow(img)
+        plt.savefig(save_folder + 'img_{}.png'.format(i))
         plt.show()
-        plt.imshow(lab); # plt.savefig('lab_{}.png'.format(i)); plt.show(); plt.close()
+        plt.close()
+        
+        plt.imshow(lab)
+        plt.savefig(save_folder + 'lab_{}.png'.format(i))
         plt.show()
-
-
-def random_replace(labels, value_to_replace, p, replacement_value=255):
-    """ Randomly replace pixels in labels with probability p with the replace value """
-    
-    # Find the indices where the value occurs
-    rows, cols = torch.where(labels.squeeze() == value_to_replace)
-
-    # make a mask of true / false with probability p at the size of the replacement indeces        
-    choose_subset = torch.rand(rows.size()) < p
-    
-    # generate a random subset of these indeces
-    rows_subset, cols_subset = rows[choose_subset], cols[choose_subset]
-
-    # replace the value on this random subset of indeces
-    labels[rows_subset, cols_subset] = replacement_value
-    
-    return labels
+        plt.close()
 
 
 def transforms(dataset, image: torch.Tensor, labels: torch.Tensor):
@@ -127,9 +115,10 @@ def compute_dataset_means(dataset: torch.utils.data.Dataset):
     """ compute the per-channel means for a dataset """
     means = torch.zeros(3, )
     data_size = len(dataset)
+    
     for image, _ in dataset:
         means += image.view(3, -1).mean(dim=-1) / data_size
-    means = means.unsqueeze(1)  
+        
     return means.squeeze()
 
 
