@@ -1,4 +1,4 @@
-from hesp.util.segmenter_helpers import *
+from hesp.util import segmenter_helpers
 from hesp.config.config import Config
 from hesp.embedding_space.hyperbolic_embedding_space import HyperbolicEmbeddingSpace
 from hesp.embedding_space.euclidean_embedding_space import EuclideanEmbeddingSpace
@@ -7,15 +7,15 @@ from hesp.util import loss
 from hesp.models.DeepLabV3Plus_Pytorch import network
 import torchmetrics
 import random
-# from hesp.util.data_helpers import imshow
 import os
+import torch
+# from hesp.util.data_helpers import imshow
+
 
 with open("root_folder.txt", "r") as f:
     lines = f.readlines()
     ROOT = lines[0]
-
-
-
+    
 
 class Segmenter(torch.nn.Module):
     def __init__(
@@ -156,19 +156,18 @@ class Segmenter(torch.nn.Module):
        
        
         
+       
         
     def warmup(self):
         """ Basic linear warmup scheduling. """
         print("warmup step...")
-        
         for i, param_group in enumerate(self.optimizer.param_groups):
                 param_group['lr'] = self.init_lrs[i] * (self.edx + 1) / self.warmup_epochs
                 print(param_group['lr'])    
                 
+        
+                
      
-     
-            
-            
     def train_fn(self, train_loader, val_loader, optimizer, scheduler, warmup_epochs):
         
         self.init_training_states(train_loader, val_loader, optimizer, scheduler, warmup_epochs)
@@ -222,7 +221,7 @@ class Segmenter(torch.nn.Module):
         torch.save(self.optimizer.state_dict(), save_folder + 'optimizer.pt')
         
         with open(save_folder + 'epoch.txt', 'w') as f:
-            f.write(str(self.edx + 1) + '\n' + str(self.global_steps))
+            f.write("{}\n{}".format(str(self.edx + 1), str(self.global_steps)))
 
 
             
