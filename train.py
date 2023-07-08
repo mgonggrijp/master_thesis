@@ -8,9 +8,7 @@ from train_args import args
 CYCLIC = True
 
 # change according to your system
-with open("root_folder.txt", "r") as f:
-    lines = f.readlines()
-    ROOT = lines[0]
+ROOT =  '/home/mgonggri/master_thesis/'
 
 torch.set_printoptions(threshold=float('inf'))
 torch.set_printoptions(sci_mode=False)
@@ -133,11 +131,13 @@ if args.mode == 'segmenter':
     model.config.segmenter._CYCLIC = CYCLIC
     
     if CYCLIC:
+        print('[Training with cyclic learning rate scheduling...]')
+        steps_per_epoch = len(train_files) // args.batch_size
         scheduler = torch.optim.lr_scheduler.CyclicLR(
             optimizer,
             args.slr,
             args.slr * 10, 
-            step_size_up=2000,
+            step_size_up=2 * steps_per_epoch,
             step_size_down=None,
             mode='triangular', 
             gamma=1.0, 
@@ -149,6 +149,7 @@ if args.mode == 'segmenter':
             last_epoch=-1, 
             verbose=False)
     else:
+        print('[Training with polynomial decay learning rate scheduling...]')
         scheduler = torch.optim.lr_scheduler.PolynomialLR(
             optimizer, total_iters=args.num_epochs, power=0.9, last_epoch=-1, verbose=False)     
     
@@ -157,7 +158,6 @@ if args.mode == 'segmenter':
 # endregion model and data init
     # train using a stochastic method
     if args.train_stochastic:
-        
         print('[Training with stochastic batching...]')
             
         model.train_fn_stochastic(

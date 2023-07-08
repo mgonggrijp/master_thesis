@@ -16,9 +16,7 @@ import numpy as np
 import torchvision.transforms.functional as TF
 import matplotlib.pyplot as plt
 
-with open("root_folder.txt", "r") as f:
-    lines = f.readlines()
-    ROOT = lines[0]
+ROOT = '/home/mgonggri/master_thesis/'
 
 
 # change depending on where the folder is located
@@ -58,10 +56,15 @@ def transforms(dataset, image: torch.Tensor, labels: torch.Tensor):
             new_size = [int(rescale_factor * h), int(rescale_factor * w)]
             
             image = TF.resize(
-                image, new_size, torchvision.transforms.InterpolationMode.BILINEAR, antialias=True)
+                image, new_size,
+                torchvision.transforms.InterpolationMode.BILINEAR,
+                antialias=True)
             
             labels = TF.resize(
-                labels.unsqueeze(0), new_size, torchvision.transforms.InterpolationMode.NEAREST, antialias=False)
+                labels[None, :],
+                new_size,
+                torchvision.transforms.InterpolationMode.NEAREST,
+                antialias=False)
             
             _, h, w = image.shape
             top  = random.randint(0, int(0.5 * h)) # uniform offset
@@ -102,11 +105,11 @@ def transforms(dataset, image: torch.Tensor, labels: torch.Tensor):
             new_image,dataset.output_size,torchvision.transforms.InterpolationMode.BILINEAR,antialias=True)
         
         labels = TF.resize(
-            new_labels.unsqueeze(0), dataset.output_size, torchvision.transforms.InterpolationMode.NEAREST, antialias=False)
+            new_labels[None, :], dataset.output_size, torchvision.transforms.InterpolationMode.NEAREST, antialias=False)
 
         labels = labels.squeeze()
         
-        image = image - dataset.means.unsqueeze(-1).unsqueeze(-1)
+        image = image - dataset.means[:, None, None]
 
         return image, labels.unsqueeze(0)
 

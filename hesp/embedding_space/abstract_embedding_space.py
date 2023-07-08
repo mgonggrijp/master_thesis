@@ -22,6 +22,7 @@ class AbstractEmbeddingSpace(torch.nn.Module):
         self.EPS = torch.tensor(1e-15)
         self.PROJ_EPS = torch.tensor(1e-3)
         self.running_norms = 0.0
+        self.norm_count = 0
         
         std_normals = torch.full(
             size=[self.tree.M, self.dim], fill_value=0.05)
@@ -66,6 +67,7 @@ class AbstractEmbeddingSpace(torch.nn.Module):
         if steps % 15 == 0:
             with torch.no_grad():
                 self.running_norms += round(torch.linalg.vector_norm(proj_embs, dim=1).mean().item(), 5)
+                self.norm_count += 1
         
         # compute the conditional probabilities
         cprobs = self.run(proj_embs)

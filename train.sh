@@ -4,8 +4,8 @@
 #SBATCH --gpus-per-node=1
 #SBATCH --cpus-per-task=18
 #SBATCH --partition=gpu
-#SBATCH --time=10:00:00
-#SBATCH --job-name=_run_2
+#SBATCH --time=10:30:00
+#SBATCH --job-name=run_3
  
 module purge
 module load 2022
@@ -16,8 +16,7 @@ cp $HOME/master_thesis/train.py /scratch-shared/$USER
 cd /scratch-shared/$USER
 
 srun python -u $HOME/master_thesis/train.py \
-  --slr 0.001 --warmup_epoch 3 --c 0.2 --train_metrics \
-  --seed 2.0 --num_epochs 100 --id _run_2 \
-  --save_state > outputs_run_2.txt
+  --slr 0.0001 --c 0.2 --train_metrics --seed 3.0 --num_epochs 60 --id _run_3 \
+  --save_state > outputs_run_3.txt
 
-cp -r  outputs_run_2.txt $HOME/master_thesis/output_files
+cp -r  outputs_run_3.txt $HOME/master_thesis/output_files

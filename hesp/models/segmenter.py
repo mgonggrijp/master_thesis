@@ -12,9 +12,7 @@ import torch
 # from hesp.util.data_helpers import imshow
 
 
-with open("root_folder.txt", "r") as f:
-    lines = f.readlines()
-    ROOT = lines[0]
+ROOT = '/home/mgonggri/master_thesis/'
     
 
 class Segmenter(torch.nn.Module):
@@ -24,8 +22,9 @@ class Segmenter(torch.nn.Module):
         config: Config,
         device,
         save_folder: str = "saves/",
-        seed: float = None
-    ):        
+        seed: float = None,
+        uncertainty_weights: bool = False,
+    ) -> None:        
         
         super().__init__()
         
@@ -37,6 +36,7 @@ class Segmenter(torch.nn.Module):
         self.val_metrics = config.segmenter._VAL_METRICS
         self.device = device
         self.save_state = config.segmenter._SAVE_STATE
+        self.use_uncertainty_weights = uncertainty_weights
         
         if self.config.dataset._NAME == 'pascal':
             i2c_file = config._ROOT + "datasets/pascal/PASCAL_i2c.txt"
@@ -74,44 +74,94 @@ class Segmenter(torch.nn.Module):
         
         
         
-    def max_sample_norm_normalize(self, embeddings: torch.Tensor) -> torch.Tensor:
+    def MSNN_old(self, embeddings: torch.Tensor) -> torch.Tensor:
         """ 
         Normalize a batch of embeddings of shape (batch, dim, height, width) by the maximum norm over dim
         for every batch element and rescale them s.t. the maximum norm is equal to the radius 
         of the embedding space curvature: 1 / sqrt(c).
         """
-        norms = torch.linalg.vector_norm(embeddings, dim=1) 
-        max_sample_norms = norms.amax(dim=(1, 2)) 
+        with torch.no_grad():
+            norms = torch.linalg.vector_norm(embeddings, dim=1) 
+            
+            max_sample_norms = norms.amax(dim=(1, 2)) 
+            
         normalized = embeddings / max_sample_norms[:, None, None, None] 
+        
         rescaled_normalized = normalized * (1.0 / torch.sqrt(self.embedding_space.curvature))
+        
         return rescaled_normalized
+    
+    
+    
+    
+    # better version --> doesn't compute norms for masked pixels 
+    def MSNN_new(self, embeddings) -> torch.Tensor:
+        """ 
+        Normalize a batch of embeddings of shape (batch, dim, height, width) by the maximum norm over dim
+        for every batch element and rescale them s.t. the maximum norm is equal to the radius 
+        of the embedding space curvature: 1 / sqrt(c). Take into account the pixel masking.
+        """
+        with torch.no_grad():
+            # compute the norms of the pixels that are not masked out
+            norms = torch.linalg.vector_norm(embeddings.moveaxis(1,-1)[self.valid_mask], dim=-1)
+            
+            # compute the slices that correspond to samples after masking
+            slices = self.valid_mask.sum(dim=(1,2))
+
+            # every sample has one maximum norm value
+            sample_maxes = torch.ones(embeddings.size(0), 1, 1, 1,
+                                       device=self.device)
+
+            start = 0
+            for i, s in enumerate(slices):
+                end = start + s
+                
+                # catch case where the sample contains no valid embeddings;
+                if not start == end:
+                    # select the maximum norm for the unmasked embeddings in current sample
+                    sample_maxes[i] = torch.amax(norms[start : end], dim=0)
+                
+                start = end
+
+        # normalize the values in each batch element by their respective max norm
+        # and rescale them by 1 / sqrt(c)
+        return embeddings / sample_maxes * (1.0 / torch.sqrt(self.embedding_space.curvature))
             
             
             
     
     def forward(self):
-        """
-        Call embedding model, normalize embeddings and compute class probs from these.
-        """
+        """Call embedding model, normalize embeddings and compute class probs from these."""
+        
         # sh (batch, dim, height, width)
         embs = self.embedding_model(self.images) 
+        
         # normalize the norms in each sample by the maximum norm for that same sample;
-        normalized = self.max_sample_norm_normalize(embs) # (batch, dim, height, width)
-        # sh (batch, nclasses, height, width)
+        normalized = self.MSNN_new(embs) 
+        
+        
+        if self.use_uncertainty_weights:
+            self.uncertainty_weights = loss.compute_uncertainty_weights(normalized,
+                                                                        self.valid_mask,
+                                                                        self.embedding_space.curvature
+                                                                        )
+        
         self.cprobs = self.embedding_space(normalized, self.steps) 
 
     
     
     
+    
     def end_of_epoch(self):
-        average_train_norms = self.embedding_space.running_norms / self.steps
+        average_train_norms = self.embedding_space.running_norms / self.embedding_space.norm_count
+        self.embedding_space.norm_count = 0
         print('[average train embedding norms]  {}'.format(str(average_train_norms)))
         
         self.embedding_space.running_norms = 0.0
         self.steps = 0
         self.running_loss = 0.0
         
-        if self.edx + 1 >= self.warmup_epochs and not self.config.segmenter._CYCLIC:
+        if self.edx >= self.warmup_epochs and not self.config.segmenter._CYCLIC:
             print('scheduler step...')
             self.scheduler.step()
             
@@ -121,7 +171,8 @@ class Segmenter(torch.nn.Module):
         if self.val_metrics:
             self.compute_metrics_dataset(self.val_loader, 'val')
         
-        average_val_norms = self.embedding_space.running_norms / self.steps
+        average_val_norms = self.embedding_space.running_norms / self.embedding_space.norm_count
+        self.embedding_space.norm_count = 0
         print('[average val embedding norms]    {}'.format(str(average_val_norms)))
         
         self.embedding_space.running_norms = 0.0
@@ -133,9 +184,8 @@ class Segmenter(torch.nn.Module):
     def update_model(self):
         """ Compute the loss based on the probs and labels. Clip grads, loss backwards and optimizer step. """
         
-        valid_mask = self.labels <= self.tree.M - 1
-        valid_cprobs = self.cprobs.moveaxis(1, -1)[valid_mask]
-        valid_labels = self.labels[valid_mask]
+        valid_cprobs = self.cprobs.moveaxis(1, -1)[self.valid_mask]
+        valid_labels = self.labels[self.valid_mask]
         
         hce_loss = loss.CCE(valid_cprobs, valid_labels, self.tree, self.class_weights)
         self.running_loss += hce_loss.item()
@@ -168,20 +218,20 @@ class Segmenter(torch.nn.Module):
         
                 
      
-    def train_fn(self, train_loader, val_loader, optimizer, scheduler, warmup_epochs):
-        
+    def train_fn(self, train_loader, val_loader, optimizer, scheduler, warmup_epochs=0):
         self.init_training_states(train_loader, val_loader, optimizer, scheduler, warmup_epochs)
 
         for edx in range(self.start_edx, self.config.segmenter._NUM_EPOCHS + self.start_edx, 1):
             self.edx = edx
             
             # if still in warmup epochs, take warmup steps
-            if self.edx < self.warmup_epochs:
-                self.warmup()
+            # if self.edx < self.warmup_epochs:
+                # self.warmup()
             
             for images, labels, _ in train_loader:
                 self.labels = labels.to(self.device).squeeze()
                 self.images = images.to(self.device)
+                self.valid_mask = self.labels <= self.tree.M - 1
                 
                 # compute the class probabilities for each pixel
                 self.forward()
@@ -190,8 +240,8 @@ class Segmenter(torch.nn.Module):
                 self.update_model()
                 
                  # when using cyclic learning rate scheduling
-                if self.config.segmenter._CYCLIC:
-                    self.scheduler.step()  
+                # if self.config.segmenter._CYCLIC and edx >= warmup_epochs:
+                self.scheduler.step()  
                 
                 # print intermediate metrics
                 if self.train_metrics:
@@ -284,7 +334,7 @@ class Segmenter(torch.nn.Module):
     
     
     
-    def train_fn_stochastic(self, train_dataset, val_loader, optimizer, scheduler, warmup_epochs):
+    def train_fn_stochastic(self, train_dataset, val_loader, optimizer, scheduler, warmup_epochs=0):
         """ Probabilistic training loop that draws sample indeces from a multinomial distribtution. """
         self.init_training_states(train_dataset, val_loader, optimizer, scheduler, warmup_epochs)
         torch.set_printoptions(sci_mode=False)
@@ -310,6 +360,8 @@ class Segmenter(torch.nn.Module):
                 # make the batch of images and labels using the indeces;
                 self.collate_fn()
                 
+                self.valid_mask = self.labels <= self.tree.M - 1
+                
                 # compute the class probabilities for each pixel;
                 self.forward()
                 
@@ -319,6 +371,8 @@ class Segmenter(torch.nn.Module):
                     
                 # compute the loss and update model parameters;
                 self.update_model()
+
+                self.scheduler.step()
                 
             # reset steps, increment epoch, take a scheduler step and 
             self.end_of_epoch()
@@ -346,6 +400,7 @@ class Segmenter(torch.nn.Module):
                 acc = str(round(self.acc_fn.compute().cpu().mean().item(), 5))
                 miou = str(round(self.iou_fn.compute().cpu().mean().item(), 5))
                 
+                print("[current lr's]        {}".format([p['lr'] for p in self.optimizer.param_groups]))
                 print('[global step]         {}'.format(str(self.global_steps)))
                 print('[average loss]        {}'.format(avg_loss))
                 print('[accuracy]            {}'.format(acc))
