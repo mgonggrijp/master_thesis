@@ -1,7 +1,6 @@
 import argparse
 from hesp.config.dataset_config import DATASET_CFG_DICT
 
-
 parser = argparse.ArgumentParser(
     description="Train models."
 )

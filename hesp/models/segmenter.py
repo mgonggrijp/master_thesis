@@ -9,11 +9,10 @@ import torchmetrics
 import random
 import os
 import torch
+from hesp.util.norm_registry import NormRegistry
 # from hesp.util.data_helpers import imshow
 
-
 ROOT = '/home/mgonggri/master_thesis/'
-    
 
 class Segmenter(torch.nn.Module):
     def __init__(
@@ -36,6 +35,9 @@ class Segmenter(torch.nn.Module):
         self.val_metrics = config.segmenter._VAL_METRICS
         self.device = device
         self.save_state = config.segmenter._SAVE_STATE
+        
+        if self.config.segmenter._REGISTER_NORMS:
+            self.register_norms = True
         
         if self.config.dataset._NAME == 'pascal':
             i2c_file = config._ROOT + "datasets/pascal/PASCAL_i2c.txt"
@@ -136,9 +138,9 @@ class Segmenter(torch.nn.Module):
         if self.embedding_space.return_projections:
             self.cprobs, proj_embs = self.embedding_space(normalized, self.valid_mask, self.steps)
             
-            # update the projection norms
-            with torch.no_grad():
-                self.mean_projection_norms[self.batch_indeces] = torch.linalg.vector_norm(proj_embs, dim=1).mean(dim=(1,2))
+            # update the norm registry
+            if self.register_norms:
+                self.norm_registry.update(proj_embs)
             
         else:
             self.cprobs = self.embedding_space(normalized, self.valid_mask, self.steps)
@@ -272,6 +274,7 @@ class Segmenter(torch.nn.Module):
         scheduler,
         ):
         """ Initialize all the variables into self which are used for training. """
+        EPS = 1e-6
         
         if self.config.segmenter._TRAIN_STOCHASTIC:
             print('Initializing stochastic training setup...')
@@ -281,9 +284,15 @@ class Segmenter(torch.nn.Module):
             # initialise all sample probabilities to be equally likely
             self.sample_probs = torch.ones(self.num_samples) / self.num_samples
             # initialise norms as a small number
-            self.mean_projection_norms = torch.zeros(len(self.dataset), device=self.device) + 1e-6
+            self.mean_projection_norms = torch.zeros(len(self.dataset), device=self.device) + EPS
             # projected embeddings are used to compute the sample probabilities
             self.embedding_space.return_projections = True
+
+        else:
+            self.num_samples = len(train.dataset)
+            
+        if self.register_norms:
+            self.norm_registry = NormRegistry(self.num_samples, self.config.dataset._NUM_CLASSES)
             
         self.val_loader = val_loader
         self.scheduler = scheduler
