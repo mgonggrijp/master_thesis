@@ -1,14 +1,14 @@
 
 JOB STATISTICS
 ==============
-Job ID: 3034332
+Job ID: 3034683
 Cluster: snellius
 User/Group: mgonggri/mgonggri
 State: COMPLETED (exit code 0)
 Nodes: 1
 Cores per node: 18
-CPU Utilized: 21:35:52
-CPU Efficiency: 12.09% of 7-10:39:00 core-walltime
-Job Wall-clock time: 09:55:30
+CPU Utilized: 21:52:55
+CPU Efficiency: 12.22% of 7-11:00:54 core-walltime
+Job Wall-clock time: 09:56:43
 Memory Utilized: 48.86 GB
 Memory Efficiency: 0.00% of 0.00 MB

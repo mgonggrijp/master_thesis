@@ -59,6 +59,7 @@ if args.mode == 'segmenter':
     config.segmenter._VAL_METRICS = args.val_metrics
     config.segmenter._TRAIN_STOCHASTIC = args.train_stochastic
     config.segmenter._SAVE_STATE = args.save_state
+    config.segmenter._USE_UNCERTAINTY_WEIGHTS = args.use_uw
     
     if not args.num_epochs:
         config.segmenter._NUM_EPOCHS = config.dataset._NUM_EPOCHS
@@ -101,7 +102,7 @@ if args.mode == 'segmenter':
                     output_size=(config.segmenter._HEIGHT, config.segmenter._WIDTH),
                     scale=(config.segmenter._MIN_SCALE, config.segmenter._MAX_SCALE))
         # set dataset into training mode and give it the means
-        train_dataset.means = torch.load('datasets/pascal/means.pt')
+        train_dataset.means = torch.load(ROOT + 'datasets/pascal/means.pt')
         train_dataset.use_transforms = True
         train_dataset.is_training = True
     
@@ -161,12 +162,11 @@ if args.mode == 'segmenter':
         print('[Training with stochastic batching...]')
             
         model.train_fn_stochastic(
-            train_dataset, val_loader, optimizer, scheduler, args.warmup_epochs)
+            train_dataset, val_loader, optimizer, scheduler)
 
     # train with standard dataloading, including shuffling        
     else:
         print('[Training with default shuffled batching...]')
-            
         model.train_fn(
-            train_loader, val_loader, optimizer, scheduler, args.warmup_epochs)
+            train_loader, val_loader, optimizer, scheduler)
 

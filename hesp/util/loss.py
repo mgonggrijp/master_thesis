@@ -47,6 +47,35 @@ def compute_uncertainty_weights(embeddings: torch.Tensor, valid_mask: torch.Tens
     return weights
 
 
+def compute_uweights_simple(embeddings, valid_mask):
+    
+    with torch.no_grad():
+        # mask out the embeddings corresponding to ignore labels
+        masked_embs = embeddings.moveaxis(1, -1)[valid_mask]
+        
+        # figure out how many elements get masked out per sample
+        slices = valid_mask.sum(dim=(1,2))
+        
+        # each remaining pixel embedding gets one weight value
+        weights = torch.ones(masked_embs.size(0), device=embeddings.device)
+        
+        start = 0
+        # go through samples
+        for s in slices:
+            # set slice end range
+            end = start  + s
+            
+            # compute L2 norms for a sample
+            norms = torch.linalg.norm(masked_embs[start : end], dim=-1)
+            
+            # weights are inverse of the L2 norms
+            weights[start : end] = 1.0 / norms
+            
+            # move to next slice
+            start = end
+            
+    return weights    
+
 def CCE(
     cprobs: torch.Tensor,
     labels: torch.Tensor,

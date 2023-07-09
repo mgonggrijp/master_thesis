@@ -36,7 +36,6 @@ class Segmenter(torch.nn.Module):
         self.val_metrics = config.segmenter._VAL_METRICS
         self.device = device
         self.save_state = config.segmenter._SAVE_STATE
-        self.use_uncertainty_weights = uncertainty_weights
         
         if self.config.dataset._NAME == 'pascal':
             i2c_file = config._ROOT + "datasets/pascal/PASCAL_i2c.txt"
@@ -72,8 +71,6 @@ class Segmenter(torch.nn.Module):
         )
         
         
-        
-        
     def MSNN_old(self, embeddings: torch.Tensor) -> torch.Tensor:
         """ 
         Normalize a batch of embeddings of shape (batch, dim, height, width) by the maximum norm over dim
@@ -90,8 +87,6 @@ class Segmenter(torch.nn.Module):
         rescaled_normalized = normalized * (1.0 / torch.sqrt(self.embedding_space.curvature))
         
         return rescaled_normalized
-    
-    
     
     
     # better version --> doesn't compute norms for masked pixels 
@@ -128,29 +123,26 @@ class Segmenter(torch.nn.Module):
         return embeddings / sample_maxes * (1.0 / torch.sqrt(self.embedding_space.curvature))
             
             
-            
-    
     def forward(self):
         """Call embedding model, normalize embeddings and compute class probs from these."""
         
-        # sh (batch, dim, height, width)
+        # make the pixel embeddings with the backbone model;
         embs = self.embedding_model(self.images) 
         
-        # normalize the norms in each sample by the maximum norm for that same sample;
+        # normalize the embeddings by the maximum norm in the same sample and rescale 
         normalized = self.MSNN_new(embs) 
         
-        
-        if self.use_uncertainty_weights:
-            self.uncertainty_weights = loss.compute_uncertainty_weights(normalized,
-                                                                        self.valid_mask,
-                                                                        self.embedding_space.curvature
-                                                                        )
-        
-        self.cprobs = self.embedding_space(normalized, self.steps) 
+        # perform multinomial logistic regression in the embedding space to compute the probs;
+        if self.embedding_space.return_projections:
+            self.cprobs, proj_embs = self.embedding_space(normalized, self.valid_mask, self.steps)
+            
+            # update the projection norms
+            with torch.no_grad():
+                self.mean_projection_norms[self.batch_indeces] = torch.linalg.vector_norm(proj_embs, dim=1).mean(dim=(1,2))
+            
+        else:
+            self.cprobs = self.embedding_space(normalized, self.valid_mask, self.steps)
 
-    
-    
-    
     
     def end_of_epoch(self):
         average_train_norms = self.embedding_space.running_norms / self.embedding_space.norm_count
@@ -161,10 +153,6 @@ class Segmenter(torch.nn.Module):
         self.steps = 0
         self.running_loss = 0.0
         
-        if self.edx >= self.warmup_epochs and not self.config.segmenter._CYCLIC:
-            print('scheduler step...')
-            self.scheduler.step()
-            
         if self.train_metrics:
             self.compute_metrics('train')
             
@@ -177,8 +165,10 @@ class Segmenter(torch.nn.Module):
         
         self.embedding_space.running_norms = 0.0
         self.steps = 0
-
         
+        # if training stochastically, update the sample probs at the end of each epoch
+        if self.config.segmenter._TRAIN_STOCHASTIC:
+            self.compute_sample_probs()
 
         
     def update_model(self):
@@ -187,15 +177,19 @@ class Segmenter(torch.nn.Module):
         valid_cprobs = self.cprobs.moveaxis(1, -1)[self.valid_mask]
         valid_labels = self.labels[self.valid_mask]
         
-        hce_loss = loss.CCE(valid_cprobs, valid_labels, self.tree, self.class_weights)
+        hce_loss = loss.CCE(
+            valid_cprobs,
+            valid_labels,
+            self.tree,
+            self.embedding_space.uncertainty_weights)
+        
         self.running_loss += hce_loss.item()
         
         self.print_intermediate()
         
         torch.nn.utils.clip_grad_norm_(
             self.embedding_space.offsets,
-            self.config.segmenter._GRAD_CLIP
-        )
+            self.config.segmenter._GRAD_CLIP)
         
         hce_loss.backward()
         self.optimizer.step()
@@ -204,33 +198,17 @@ class Segmenter(torch.nn.Module):
         self.steps += 1
         self.global_steps += 1
        
-       
-        
-       
-        
-    def warmup(self):
-        """ Basic linear warmup scheduling. """
-        print("warmup step...")
-        for i, param_group in enumerate(self.optimizer.param_groups):
-                param_group['lr'] = self.init_lrs[i] * (self.edx + 1) / self.warmup_epochs
-                print(param_group['lr'])    
-                
-        
-                
      
-    def train_fn(self, train_loader, val_loader, optimizer, scheduler, warmup_epochs=0):
-        self.init_training_states(train_loader, val_loader, optimizer, scheduler, warmup_epochs)
+    def train_fn(self, train_loader, val_loader, optimizer, scheduler):
+        self.init_training_states(train_loader, val_loader, optimizer, scheduler)
 
         for edx in range(self.start_edx, self.config.segmenter._NUM_EPOCHS + self.start_edx, 1):
             self.edx = edx
             
-            # if still in warmup epochs, take warmup steps
-            # if self.edx < self.warmup_epochs:
-                # self.warmup()
-            
-            for images, labels, _ in train_loader:
+            for images, labels, batch_indeces in train_loader:
                 self.labels = labels.to(self.device).squeeze()
                 self.images = images.to(self.device)
+                self.batch_indeces = batch_indeces
                 self.valid_mask = self.labels <= self.tree.M - 1
                 
                 # compute the class probabilities for each pixel
@@ -240,7 +218,6 @@ class Segmenter(torch.nn.Module):
                 self.update_model()
                 
                  # when using cyclic learning rate scheduling
-                # if self.config.segmenter._CYCLIC and edx >= warmup_epochs:
                 self.scheduler.step()  
                 
                 # print intermediate metrics
@@ -254,13 +231,9 @@ class Segmenter(torch.nn.Module):
             self.save_states()
             print('Training done. Saving final model state..')
     
-    
-    
             
     def save_states(self):
         save_folder = self.config.segmenter._SAVE_FOLDER
-        
-        print(save_folder)
         
         if not os.path.exists(save_folder):
             os.mkdir(save_folder)
@@ -273,8 +246,6 @@ class Segmenter(torch.nn.Module):
         with open(save_folder + 'epoch.txt', 'w') as f:
             f.write("{}\n{}".format(str(self.edx + 1), str(self.global_steps)))
 
-
-            
             
     def collate_fn(self):
         """
@@ -293,22 +264,31 @@ class Segmenter(torch.nn.Module):
         self.labels = torch.cat(label_batch).to(self.device).squeeze()
         
         
-        
-        
-    def init_training_states(self, train, val_loader, optimizer, scheduler, warmup_epochs):
+    def init_training_states(
+        self,
+        train,
+        val_loader,
+        optimizer,
+        scheduler,
+        ):
         """ Initialize all the variables into self which are used for training. """
         
         if self.config.segmenter._TRAIN_STOCHASTIC:
+            print('Initializing stochastic training setup...')
             self.dataset = train
             self.num_samples = len(self.dataset)
             self.batch_size = self.config.segmenter._BATCH_SIZE
+            # initialise all sample probabilities to be equally likely
             self.sample_probs = torch.ones(self.num_samples) / self.num_samples
+            # initialise norms as a small number
+            self.mean_projection_norms = torch.zeros(len(self.dataset), device=self.device) + 1e-6
+            # projected embeddings are used to compute the sample probabilities
+            self.embedding_space.return_projections = True
             
         self.val_loader = val_loader
         self.scheduler = scheduler
         self.optimizer = optimizer
         self.class_weights = torch.load(ROOT + "datasets/pascal/class_weights.pt").to(self.device)
-        self.warmup_epochs = warmup_epochs
         self.running_loss = 0.0
         self.global_steps = 0
         self.steps = 0
@@ -332,22 +312,33 @@ class Segmenter(torch.nn.Module):
             self.start_edx = 0 
     
     
+    def compute_sample_probs(self):
+        """
+        Compute the probabilities of the samples by the inverse of their average norms
+        such that larger norms make a sample less likely.
+        """
+        with torch.no_grad():
+            # compute softmax over inverse norms
+            print('Updating sample probabilities...')
+            self.sample_probs = torch.softmax((1.0 / self.mean_projection_norms), 0)
     
     
-    def train_fn_stochastic(self, train_dataset, val_loader, optimizer, scheduler, warmup_epochs=0):
+    def train_fn_stochastic(self, train_dataset, val_loader, optimizer, scheduler):
         """ Probabilistic training loop that draws sample indeces from a multinomial distribtution. """
-        self.init_training_states(train_dataset, val_loader, optimizer, scheduler, warmup_epochs)
+        self.init_training_states(train_dataset, val_loader, optimizer, scheduler)
         torch.set_printoptions(sci_mode=False)
+        
+        # used for computing the sample probabilities
         
         for edx in range(self.start_edx, self.config.segmenter._NUM_EPOCHS, 1):
             self.edx = edx
             
-            # generate all sample indeces for this epoch; allow for doubles
-            indeces = torch.multinomial(self.sample_probs, self.num_samples, replacement=True)
-            
-            # warmup schedule
-            self.warmup()
-            
+            # draw len(training data) number of samples indeces
+            indeces = torch.multinomial(
+                self.sample_probs,
+                self.num_samples,
+                replacement=True)
+                
             for i in range(0, self.num_samples, self.batch_size):
                 bottom, upper = i, i + self.batch_size
                 
@@ -360,6 +351,7 @@ class Segmenter(torch.nn.Module):
                 # make the batch of images and labels using the indeces;
                 self.collate_fn()
                 
+                # for masking out ignored pixels
                 self.valid_mask = self.labels <= self.tree.M - 1
                 
                 # compute the class probabilities for each pixel;
@@ -377,10 +369,19 @@ class Segmenter(torch.nn.Module):
             # reset steps, increment epoch, take a scheduler step and 
             self.end_of_epoch()
             
+            proj_mean = self.mean_projection_norms.mean()
+            proj_max = self.mean_projection_norms.amax()
+            proj_min = self.mean_projection_norms.amax()
+            
+            prob_mean = self.sample_probs.mean()
+            prob_max = self.sample_probs.amax()
+            prob_min = self.sample_probs.amin()
+            
+            print('projections:', proj_mean, proj_max, proj_min)
+            print('probabilities:', prob_mean, prob_max, prob_min)
+            
         print('Training done. Saving final model state..')
         self.save_states()
-                
-                
                 
                 
     def metrics_step(self):         
@@ -390,8 +391,6 @@ class Segmenter(torch.nn.Module):
             self.iou_fn.forward(preds, self.labels)
             self.acc_fn.forward(preds, self.labels)
 
-
-    
     
     def print_intermediate(self, print_every=50):
         if self.steps % print_every == 0 and self.steps > 0:
@@ -407,8 +406,6 @@ class Segmenter(torch.nn.Module):
                 print('[miou]                {}'.format(miou))
                                     
     
-    
-    
     def compute_metrics(self, mode):
         accuracy = self.acc_fn.compute().cpu()
         miou = self.iou_fn.compute().cpu()
@@ -420,8 +417,6 @@ class Segmenter(torch.nn.Module):
         
         self.iou_fn.reset()
         self.acc_fn.reset()
-    
-    
     
     
     def compute_metrics_dataset(self, loader: torch.utils.data.DataLoader, mode):
@@ -437,8 +432,6 @@ class Segmenter(torch.nn.Module):
                 self.metrics_step()
                 
             self.compute_metrics(mode)
-
-
 
 
     def print_metrics(self, metrics, ncls, mode):
@@ -459,8 +452,6 @@ class Segmenter(torch.nn.Module):
         print('-----------------[end {} metrics epoch {}]-----------------\n\n'.format(mode, self.edx))
     
     
-    
-        
     def pretty_print(self, metrics_list):
         target = 15
         for label, x in metrics_list:

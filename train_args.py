@@ -24,6 +24,14 @@ parser.add_argument(
 
 
 parser.add_argument(
+    '--use_uw',
+    action='store_true',
+    default=False,
+    help='Whether to use uncertainty weighting in the loss. Only works for hyperbolic embedding space geometry.'
+)
+
+
+parser.add_argument(
     '--train_metrics',
     action='store_true',
     default=False,

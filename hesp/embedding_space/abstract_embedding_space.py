@@ -6,6 +6,7 @@ import torch
 from hesp.config.config import Config
 from hesp.hierarchy.tree import Tree
 import geoopt
+from hesp.util.loss import compute_uncertainty_weights
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,6 +24,13 @@ class AbstractEmbeddingSpace(torch.nn.Module):
         self.PROJ_EPS = torch.tensor(1e-3)
         self.running_norms = 0.0
         self.norm_count = 0
+        self.geometry = config.embedding_space._GEOMETRY
+        self.use_uncertainty_weights = config.segmenter._USE_UNCERTAINTY_WEIGHTS
+        self.uncertainty_weights = None
+        self.return_projections = False
+        
+        if self.use_uncertainty_weights:
+            print('Training with uncertainty weighting.')
         
         std_normals = torch.full(
             size=[self.tree.M, self.dim], fill_value=0.05)
@@ -48,7 +56,13 @@ class AbstractEmbeddingSpace(torch.nn.Module):
                 torch.normal(0.0, std_offsets), requires_grad=True)
             
 
-    def forward(self, embeddings: torch.Tensor, steps):
+    def forward(
+        self,
+        embeddings: torch.Tensor,
+        valid_mask: torch.Tensor = None,
+        steps: int = 0
+        ):
+        
         """ 
         Given a set of vectors embedded in Euclidean space,
         compute the conditional probabilities for each of these. 
@@ -64,6 +78,11 @@ class AbstractEmbeddingSpace(torch.nn.Module):
         # embed the vectors in poincareball
         proj_embs = self.project(embeddings)
         
+        # compute uncertainty weights that are used to rescale the loss         
+        # if self.use_uncertainty_weights and self.geometry == 'hyperbolic':
+        #     self.uncertainty_weights = compute_uncertainty_weights(
+        #         proj_embs, valid_mask, self.curvature)
+        
         if steps % 15 == 0:
             with torch.no_grad():
                 self.running_norms += round(torch.linalg.vector_norm(proj_embs, dim=1).mean().item(), 5)
@@ -71,6 +90,9 @@ class AbstractEmbeddingSpace(torch.nn.Module):
         
         # compute the conditional probabilities
         cprobs = self.run(proj_embs)
+        
+        if self.return_projections:
+            return cprobs, proj_embs
         
         return cprobs
         
