@@ -62,6 +62,7 @@ def train():
         config.segmenter._TRAIN_STOCHASTIC = args.train_stochastic
         config.segmenter._SAVE_STATE = args.save_state
         config.segmenter._USE_UNCERTAINTY_WEIGHTS = args.use_uw
+        config.segmenter._REGISTER_NORMS = args.register_norms
         
         if not args.num_epochs:
             config.segmenter._NUM_EPOCHS = config.dataset._NUM_EPOCHS

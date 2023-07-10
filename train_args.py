@@ -15,6 +15,13 @@ parser.add_argument(
 
 
 parser.add_argument(
+    '--register_norms',
+    action='store_true',
+    default=False,
+)
+
+
+parser.add_argument(
     '--save_state',
     action='store_true',
     default=False,

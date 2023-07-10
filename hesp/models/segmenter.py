@@ -140,7 +140,8 @@ class Segmenter(torch.nn.Module):
             
             # update the norm registry
             if self.register_norms:
-                self.norm_registry.update(proj_embs)
+                self.norm_registry.update(
+                    self.valid_mask, self.valid_labels, proj_embs, self.batch_indeces)
             
         else:
             self.cprobs = self.embedding_space(normalized, self.valid_mask, self.steps)
@@ -177,11 +178,10 @@ class Segmenter(torch.nn.Module):
         """ Compute the loss based on the probs and labels. Clip grads, loss backwards and optimizer step. """
         
         valid_cprobs = self.cprobs.moveaxis(1, -1)[self.valid_mask]
-        valid_labels = self.labels[self.valid_mask]
         
         hce_loss = loss.CCE(
             valid_cprobs,
-            valid_labels,
+            self.valid_labels,
             self.tree,
             self.embedding_space.uncertainty_weights)
         
@@ -212,6 +212,7 @@ class Segmenter(torch.nn.Module):
                 self.images = images.to(self.device)
                 self.batch_indeces = batch_indeces
                 self.valid_mask = self.labels <= self.tree.M - 1
+                self.valid_labels = self.labels[self.valid_mask]
                 
                 # compute the class probabilities for each pixel
                 self.forward()
@@ -281,10 +282,13 @@ class Segmenter(torch.nn.Module):
             self.dataset = train
             self.num_samples = len(self.dataset)
             self.batch_size = self.config.segmenter._BATCH_SIZE
+
             # initialise all sample probabilities to be equally likely
             self.sample_probs = torch.ones(self.num_samples) / self.num_samples
+
             # initialise norms as a small number
             self.mean_projection_norms = torch.zeros(len(self.dataset), device=self.device) + EPS
+            
             # projected embeddings are used to compute the sample probabilities
             self.embedding_space.return_projections = True
 
