@@ -16,7 +16,7 @@ import numpy as np
 import torchvision.transforms.functional as TF
 import matplotlib.pyplot as plt
 
-ROOT = '/home/mats/master_thesis/'
+ROOT = '/home/mgonggri/master_thesis/'
 
 
 # change depending on where the folder is located

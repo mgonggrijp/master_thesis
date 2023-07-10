@@ -10,7 +10,7 @@ def train():
     from train_args import args
     
     # change according to your system
-    ROOT = '/home/mats/master_thesis/'
+    ROOT = '/home/mgonggri/master_thesis/'
 
     torch.set_printoptions(threshold=float('inf'))
     torch.set_printoptions(sci_mode=False)

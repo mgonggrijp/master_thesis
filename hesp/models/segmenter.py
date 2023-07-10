@@ -12,7 +12,7 @@ import torch
 from hesp.util.norm_registry import NormRegistry
 # from hesp.util.data_helpers import imshow
 
-ROOT = '/home/mats/master_thesis/'
+ROOT = '/home/mgonggri/master_thesis/'
 
 class Segmenter(torch.nn.Module):
     def __init__(
@@ -156,7 +156,6 @@ class Segmenter(torch.nn.Module):
         self.running_loss = 0.0
         
         self.norm_registry.average()
-        print('[unique labels]', self.label_set)
         print("[average norms per class]")
         print( self.norm_registry.average_per_class() )
         
@@ -203,11 +202,8 @@ class Segmenter(torch.nn.Module):
     def train_fn(self, train_loader, val_loader, optimizer, scheduler):
         self.init_training_states(train_loader, val_loader, optimizer, scheduler)
 
-
         for edx in range(self.start_edx, self.config.segmenter._NUM_EPOCHS + self.start_edx, 1):
             self.edx = edx
-            
-            self.label_set = set()
             
             for images, labels, batch_indeces in train_loader:
                 self.labels = labels.to(self.device).squeeze()
@@ -215,9 +211,6 @@ class Segmenter(torch.nn.Module):
                 self.batch_indeces = batch_indeces
                 self.valid_mask = self.labels <= self.tree.M - 1
                 self.valid_labels = self.labels[self.valid_mask]
-                
-                unique = labels.unique().tolist()
-                self.label_set.update(unique)
                 
                 # compute the class probabilities for each pixel
                 self.forward()
