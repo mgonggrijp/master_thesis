@@ -12,7 +12,7 @@ import torch
 from hesp.util.norm_registry import NormRegistry
 # from hesp.util.data_helpers import imshow
 
-ROOT = '/home/mgonggri/master_thesis/'
+ROOT = '/home/mats/master_thesis/'
 
 class Segmenter(torch.nn.Module):
     def __init__(
@@ -48,6 +48,8 @@ class Segmenter(torch.nn.Module):
             self.embedding_space = HyperbolicEmbeddingSpace(tree, config)
         elif config.embedding_space._GEOMETRY == 'euclidean':
             self.embedding_space = EuclideanEmbeddingSpace(tree, config)
+            
+        self.embedding_space.return_projections = True
             
         self.embedding_model = network.modeling._load_model(
             arch_type=config.base_model_name,
@@ -148,13 +150,15 @@ class Segmenter(torch.nn.Module):
 
     
     def end_of_epoch(self):
-        average_train_norms = self.embedding_space.running_norms / self.embedding_space.norm_count
-        self.embedding_space.norm_count = 0
-        print('[average train embedding norms]  {}'.format(str(average_train_norms)))
         
         self.embedding_space.running_norms = 0.0
         self.steps = 0
         self.running_loss = 0.0
+        
+        self.norm_registry.average()
+        print('[unique labels]', self.label_set)
+        print("[average norms per class]")
+        print( self.norm_registry.average_per_class() )
         
         if self.train_metrics:
             self.compute_metrics('train')
@@ -162,11 +166,6 @@ class Segmenter(torch.nn.Module):
         if self.val_metrics:
             self.compute_metrics_dataset(self.val_loader, 'val')
         
-        average_val_norms = self.embedding_space.running_norms / self.embedding_space.norm_count
-        self.embedding_space.norm_count = 0
-        print('[average val embedding norms]    {}'.format(str(average_val_norms)))
-        
-        self.embedding_space.running_norms = 0.0
         self.steps = 0
         
         # if training stochastically, update the sample probs at the end of each epoch
@@ -204,8 +203,11 @@ class Segmenter(torch.nn.Module):
     def train_fn(self, train_loader, val_loader, optimizer, scheduler):
         self.init_training_states(train_loader, val_loader, optimizer, scheduler)
 
+
         for edx in range(self.start_edx, self.config.segmenter._NUM_EPOCHS + self.start_edx, 1):
             self.edx = edx
+            
+            self.label_set = set()
             
             for images, labels, batch_indeces in train_loader:
                 self.labels = labels.to(self.device).squeeze()
@@ -213,6 +215,9 @@ class Segmenter(torch.nn.Module):
                 self.batch_indeces = batch_indeces
                 self.valid_mask = self.labels <= self.tree.M - 1
                 self.valid_labels = self.labels[self.valid_mask]
+                
+                unique = labels.unique().tolist()
+                self.label_set.update(unique)
                 
                 # compute the class probabilities for each pixel
                 self.forward()
