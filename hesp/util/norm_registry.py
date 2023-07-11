@@ -26,7 +26,6 @@ class NormRegistry:
                 compute the average norm per class over all samples
         """
         self.accumulate_registry = torch.zeros(nsamples, nclasses, device=device)
-        # for storing intermediate averages
         self.mean_registry = torch.zeros_like(self.accumulate_registry)
         self.counter = torch.zeros(self.accumulate_registry.size(), dtype=int, device=device)
         
@@ -73,40 +72,17 @@ class NormRegistry:
 
     def average(self):
         """ 
-        Compute the average of the values seen so far. When an average (sample_i, class_k) 
-        value already exists, the corresponding average is computed as the average 
-        of the current mean and the average of the newly accumulated values.
-        Assumes embedding norms are practically never zero.
+        Computes the average of the accumulation registry so far and stores it in the mean registry.
         """
         # safety to make sure to avoid division by zero
         with torch.no_grad():
             if not self.averaged:
-                
                     counter_non_zero = self.counter > 0
 
-                    # check if the average registry already has values
-                    averages_zero = self.mean_registry == 0
+                    # compute the average over the values accumulated so far
+                    self.mean_registry[counter_non_zero] = self.accumulate_registry[counter_non_zero] / self.counter[counter_non_zero]
 
-                    # new (sample_i, class_k) norms are those which have been counted and not yet averaged over
-                    new_values = counter_non_zero & averages_zero
-                    
-                    # old (sample_i, class_k) norms that have already accumulated at least one value
-                    old_values = counter_non_zero & ~averages_zero
-
-                    # compute and store the average untill now for the averages that have not been seen yet
-                    self.mean_registry[new_values] = self.accumulate_registry[new_values] / self.counter[new_values]
-
-                    # for the values that have been averaged are replaced with the average so far and the average of the new values
-                    self.mean_registry[old_values] =  (self.mean_registry[old_values] + \
-                                                       self.accumulate_registry[old_values] / self.counter[old_values]) / 2.0
-
-                    # reset the counter the continue for the next sample stream
-                    self.counter = torch.zeros_like(self.counter)
-                    
-                    # reset the accumulation registry
-                    self.accumulate_registry *= 0.0
-
-                    # s.t. you can't average twice in a row without updating first
+                    # for avoiding averaging twice in a row to save computation
                     self.averaged = True
                 
         return None
