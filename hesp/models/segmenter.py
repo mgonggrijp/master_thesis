@@ -22,7 +22,6 @@ class Segmenter(torch.nn.Module):
         device,
         save_folder: str = "saves/",
         seed: float = None,
-        uncertainty_weights: bool = False,
     ) -> None:        
         
         super().__init__()
@@ -35,9 +34,11 @@ class Segmenter(torch.nn.Module):
         self.val_metrics = config.segmenter._VAL_METRICS
         self.device = device
         self.save_state = config.segmenter._SAVE_STATE
+        self.weights = None
         
-        if self.config.segmenter._REGISTER_NORMS:
-            self.register_norms = True
+        f = self.config.segmenter._SAVE_FOLDER
+        if self.save_state and not os.path.exists(f):
+            os.mkdir(f)
         
         if self.config.dataset._NAME == 'pascal':
             i2c_file = config._ROOT + "datasets/pascal/PASCAL_i2c.txt"
@@ -126,6 +127,12 @@ class Segmenter(torch.nn.Module):
         # and rescale them by 1 / sqrt(c)
         return embeddings / sample_maxes * (1.0 / torch.sqrt(self.embedding_space.curvature))
             
+    
+    def scale_and_shift(self, embeddings: torch.Tensor) -> torch.Tensor:
+            scale = 1.0 / 15.0
+            offset = 0.0
+            return embeddings * scale + offset
+            
             
     def forward(self):
         """Call embedding model, normalize embeddings and compute class probs from these."""
@@ -134,30 +141,48 @@ class Segmenter(torch.nn.Module):
         embs = self.embedding_model(self.images) 
         
         # normalize the embeddings by the maximum norm in the same sample and rescale 
-        normalized = self.MSNN_new(embs) 
+        # normalized_embs = self.MSNN_new(embs) 
+        normalized_embs = self.scale_and_shift(embs)
         
         # perform multinomial logistic regression in the embedding space to compute the probs;
-        if self.embedding_space.return_projections:
-            self.cprobs, proj_embs = self.embedding_space(normalized, self.valid_mask, self.steps)
+        proj_embs, self.cprobs = self.embedding_space(normalized_embs)
+        
+        # compute the norm weights 
+        if self.config.segmenter._WEIGHTS != 'none':
             
-            # update the norm registry
-            if self.register_norms:
-                self.norm_registry.update(
-                    self.valid_mask, self.valid_labels, proj_embs, self.batch_indeces)
+            weight_args = {"embeddings"    : proj_embs,
+                           "valid_mask"    : self.valid_mask,
+                           "valid_labels"  : self.valid_labels,
+                           "method"        : self.config.segmenter._WEIGHTS}
             
-        else:
-            self.cprobs = self.embedding_space(normalized, self.valid_mask, self.steps)
-
-    
+            self.weights = loss.compute_weights(**weight_args)
+        
+        # update the norm registry
+        if self.config.segmenter._REGISTER_NORMS:
+            
+            self.norm_registry.update(
+                self.valid_mask,
+                self.valid_labels,
+                proj_embs,
+                self.batch_indices)
+            
+            if self.global_steps % self.config.segmenter._COLLECT_EVERY == 0:
+                norm_avgs_per_class = self.norm_registry.average_per_class()
+                print(
+                    f'[mean norms per class]\n{norm_avgs_per_class}'
+                )
+                self.norm_storage.append(norm_avgs_per_class[None, :])
+            
     def end_of_epoch(self):
         
         self.embedding_space.running_norms = 0.0
         self.steps = 0
         self.running_loss = 0.0
         
-        self.norm_registry.average()
-        print("[average norms per class]")
-        print( self.norm_registry.average_per_class() )
+        if self.config.segmenter._REGISTER_NORMS:    
+            self.norm_registry.average()
+            print("[average norms per class]")
+            print( self.norm_registry.average_per_class() )
         
         if self.train_metrics:
             self.compute_metrics('train')
@@ -170,6 +195,19 @@ class Segmenter(torch.nn.Module):
         # if training stochastically, update the sample probs at the end of each epoch
         if self.config.segmenter._TRAIN_STOCHASTIC:
             self.compute_sample_probs()
+        
+        folder = self.config.segmenter._SAVE_FOLDER
+        
+        if self.acc_storage:   
+            stored_accuracies = torch.cat(self.acc_storage, dim=0)
+            stored_mious = torch.cat(self.miou_storage, dim=0)
+            torch.save(stored_accuracies, f'{folder}accurarcies.pt')
+            torch.save(stored_mious, f'{folder}mious.pt')
+        
+        if self.norm_storage: 
+            stored_norms = torch.cat(self.norm_storage, dim=0)
+            torch.save(stored_norms, f'{folder}norms.pt')
+            
 
         
     def update_model(self):
@@ -177,15 +215,14 @@ class Segmenter(torch.nn.Module):
         
         valid_cprobs = self.cprobs.moveaxis(1, -1)[self.valid_mask]
         
-        hce_loss = loss.CCE(
-            valid_cprobs,
-            self.valid_labels,
-            self.tree,
-            self.embedding_space.uncertainty_weights)
+        # import pdb
+        # pdb.set_trace()
+        
+        hce_loss = loss.CCE(valid_cprobs, self.valid_labels, self.tree, self.weights)
         
         self.running_loss += hce_loss.item()
         
-        self.print_intermediate()
+        self.print_intermediate(self.config.segmenter._COLLECT_EVERY)
         
         torch.nn.utils.clip_grad_norm_(
             self.embedding_space.offsets,
@@ -201,14 +238,18 @@ class Segmenter(torch.nn.Module):
      
     def train_fn(self, train_loader, val_loader, optimizer, scheduler):
         self.init_training_states(train_loader, val_loader, optimizer, scheduler)
+        
+        self.acc_storage = []
+        self.miou_storage = []
+        self.norm_storage = []
 
         for edx in range(self.start_edx, self.config.segmenter._NUM_EPOCHS + self.start_edx, 1):
             self.edx = edx
             
-            for images, labels, batch_indeces in train_loader:
+            for images, labels, batch_indices in train_loader:
                 self.labels = labels.to(self.device).squeeze()
                 self.images = images.to(self.device)
-                self.batch_indeces = batch_indeces
+                self.batch_indices = batch_indices
                 self.valid_mask = self.labels <= self.tree.M - 1
                 self.valid_labels = self.labels[self.valid_mask]
                 
@@ -224,6 +265,12 @@ class Segmenter(torch.nn.Module):
                 # print intermediate metrics
                 if self.train_metrics:
                     self.metrics_step()
+                    
+                if self.global_steps % self.config.segmenter._COLLECT_EVERY == 0:
+                    mious = self.iou_fn.compute().cpu()
+                    accuracies = self.acc_fn.compute().cpu()
+                    self.miou_storage.append(mious[None, :])
+                    self.acc_storage.append(accuracies[None, :])
                 
             # reset steps, increment epoch, take a scheduler step, and update parameters
             self.end_of_epoch()
@@ -250,13 +297,13 @@ class Segmenter(torch.nn.Module):
             
     def collate_fn(self):
         """
-        Given a dataset and a list of indeces return a batch of samples.
+        Given a dataset and a list of indices return a batch of samples.
         Returns a tuple of (batch_samples, batch_labels)
         """
         image_batch = []
         label_batch = []
         
-        for idx in self.batch_indeces:
+        for idx in self.batch_indices:
             samples, labels, _ = self.dataset[idx]
             image_batch.append(samples[None, :])
             label_batch.append(labels)
@@ -293,7 +340,7 @@ class Segmenter(torch.nn.Module):
         else:
             self.num_samples = len(train.dataset)
             
-        if self.register_norms:
+        if self.config.segmenter._REGISTER_NORMS:
             self.norm_registry = NormRegistry(self.num_samples, self.config.dataset._NUM_CLASSES)
             
         self.val_loader = val_loader
@@ -328,14 +375,15 @@ class Segmenter(torch.nn.Module):
         Compute the probabilities of the samples by the inverse of their average norms
         such that larger norms make a sample less likely.
         """
-        with torch.no_grad():
-            # compute softmax over inverse norms
-            print('Updating sample probabilities...')
-            self.sample_probs = torch.softmax((1.0 / self.mean_projection_norms), 0)
+        # compute the average norm per sample from the registry
+        mean_sample_norms = self.norm_registry.average_per_sample()
+        
+        # compute the sample probs from the inverse sample norms; larger norms --> smaller probability
+        self.sample_probs = torch.softmax(1.0 / mean_sample_norms, dim=0)
     
     
     def train_fn_stochastic(self, train_dataset, val_loader, optimizer, scheduler):
-        """ Probabilistic training loop that draws sample indeces from a multinomial distribtution. """
+        """ Probabilistic training loop that draws sample indices from a multinomial distribtution. """
         self.init_training_states(train_dataset, val_loader, optimizer, scheduler)
         torch.set_printoptions(sci_mode=False)
         
@@ -344,22 +392,20 @@ class Segmenter(torch.nn.Module):
         for edx in range(self.start_edx, self.config.segmenter._NUM_EPOCHS, 1):
             self.edx = edx
             
-            # draw len(training data) number of samples indeces
-            indeces = torch.multinomial(
-                self.sample_probs,
-                self.num_samples,
-                replacement=True)
-                
+            # draw a number of random samples equal to the training data size; may contain more than one of the same
+            indices = torch.multinomial(self.sample_probs, self.num_samples, replacement=True)
+
+            # go through the random indices in batches                
             for i in range(0, self.num_samples, self.batch_size):
                 bottom, upper = i, i + self.batch_size
                 
-                # drop last batch if it becomes smaller than 2 samples;
+                # drop last batch if it becomes smaller than 2 samples; messes up the convolutions idk why
                 if self.num_samples - i < 2:
                     break
                 
-                self.batch_indeces = indeces[bottom : upper]
+                self.batch_indices = indices[bottom : upper]
                 
-                # make the batch of images and labels using the indeces;
+                # make the batch of images and labels using the indices;
                 self.collate_fn()
                 
                 # for masking out ignored pixels
@@ -404,7 +450,7 @@ class Segmenter(torch.nn.Module):
 
     
     def print_intermediate(self, print_every=50):
-        if self.steps % print_every == 0 and self.steps > 0:
+        if self.global_steps % print_every == 0 and self.global_steps > 0:
             with torch.no_grad():
                 avg_loss = str(round(self.running_loss / (self.steps + 1), 5))
                 acc = str(round(self.acc_fn.compute().cpu().mean().item(), 5))

@@ -15,6 +15,21 @@ parser.add_argument(
 
 
 parser.add_argument(
+    '--weights',
+    type=str,
+    choices=['uncertainty', 'class_based', 'none'],
+    default = 'none'
+)
+
+
+parser.add_argument(
+    '--collect_every',
+    type=int,
+    default=200,
+)
+
+
+parser.add_argument(
     '--register_norms',
     action='store_true',
     default=False,
@@ -26,14 +41,6 @@ parser.add_argument(
     action='store_true',
     default=False,
     help='Whether to save the final model states.'
-)
-
-
-parser.add_argument(
-    '--use_uw',
-    action='store_true',
-    default=False,
-    help='Whether to use uncertainty weighting in the loss. Only works for hyperbolic embedding space geometry.'
 )
 
 

@@ -1,0 +1,40 @@
+[number of training samples]    9624
+[number of validation samples]  2406
+[Training with cyclic learning rate scheduling...]
+mode : segmenter
+weights : none
+collect_every : 200
+register_norms : False
+save_state : True
+train_metrics : True
+train_stochastic : False
+data_limit : -1
+warmup_epochs : 0
+val_metrics : True
+base_model : deeplabv3plus
+resume : False
+dataset : pascal
+geometry : hyperbolic
+dim : 256
+c : 0.2
+seed : 3.0
+flat : False
+freeze_bb : False
+freeze_bn : False
+batch_size : 5
+num_epochs : 60
+device : cuda:0
+slr : 0.0001
+backbone : resnet101
+output_stride : 16
+base_save_dir : saves
+segmenter_dir : segmenter_experiments
+train : False
+val : False
+id : _base_re_3
+json_name : 
+pre_trained_bb : True
+precision : 32
+
+[Training with default shuffled batching...]
+[random seed]   3.0
