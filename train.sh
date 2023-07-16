@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=18
 #SBATCH --partition=gpu
 #SBATCH --time=15:00:00
-#SBATCH --job-name=bre_3
+#SBATCH --job-name=cw_s_1
  
 module purge
 module load 2022
@@ -19,10 +19,11 @@ srun python -u $HOME/master_thesis/train.py \
   --slr 0.0001 \
   --c 0.2 \
   --train_metrics \
-  --seed 3.0 \
+  --seed 1.0 \
   --num_epochs 60 \
-  --id _base_re_3 \
+  --id _clsw_sq_1 \
   --save_state \
-  > outputs_base_rescale_3.txt
+  --weights class_based \
+  > out_clsw_sq_1.txt
 
-cp -r  outputs_base_rescale_3.txt $HOME/master_thesis/output_files
+cp -r  out_clsw_sq_1.txt $HOME/master_thesis/output_files

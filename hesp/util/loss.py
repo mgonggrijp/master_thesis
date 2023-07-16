@@ -1,5 +1,4 @@
 import torch
-from torch.linalg import vector_norm as vnorm
 from hesp.hierarchy.tree import Tree
 
 
@@ -32,7 +31,9 @@ def compute_uncertainty_weights(embeddings: torch.Tensor, valid_mask: torch.Tens
             
             if end != start:
                 # take a slice of the masked embeddings for one sample and compute the hyperbolic distance to zero
-                dist_c_zeros = 2.0 / sqrt_c * torch.arctanh(sqrt_c * torch.linalg.vector_norm(masked_embs[start:end], dim=-1))
+                norms = torch.linalg.vector_norm(masked_embs[start : end], dim=-1)
+                
+                dist_c_zeros = 2.0 / sqrt_c * torch.arctanh(sqrt_c * norms)
                 
                 # for each sample, compute it's maximum distance
                 sample_max = torch.amax(dist_c_zeros, dim=0)
@@ -93,7 +94,7 @@ def compute_class_norm_weights(
         sample_slices = valid_mask.sum(dim=(1,2))
         
         # compute the L2 norms of the norms corresponding to valid pixels
-        valid_norms = vnorm( embeddings.moveaxis(1, -1)[valid_mask], dim=-1 )
+        valid_norms = torch.linalg.vector_norm( embeddings.moveaxis(1, -1)[valid_mask], dim=-1 )
         
         # each pixel after applying the valid mask gets one weight
         weights = torch.zeros_like(valid_norms)
@@ -126,12 +127,9 @@ def compute_class_norm_weights(
                 # find the maximum norm for the (sample, class)
                 max_class_norm = torch.amax(class_norms, dim=0)
 
-                # normalize the norms for the same (sample, class) by their maximum
-                normalized_norms = class_norms / max_class_norm
-
                 # compute and store the weights based on these norms with the selected scheme
                 if method == 'invert':
-                    weights[start : end][class_locations] = 1.0 / normalized_norms
+                    weights[start : end][class_locations] = (class_norms / max_class_norm)**-2
 
             # move to next sample slice
             start = end
@@ -155,12 +153,42 @@ def compute_weights(**weight_args):
     else:
         raise NotImplementedError()
     
+    
+def compute_norm_term(
+    embs: torch.Tensor,
+    probs: torch.Tensor,
+    valid_labels: torch.Tensor,
+    valid_mask: torch.Tensor
+    ) -> torch.Tensor:
+    """ 
+    Computes the norm term loss which punishes large embedding norms
+    when the most likely class is incorrect and punishes small norms
+    vice versa.
+    """
+    
+    # mask the probabilities and embeddings to remove ignored pixels
+    valid_probs = probs.moveaxis(1, -1)[valid_mask]
+    valid_embs = embs.moveaxis(1, -1)[valid_mask]
+    
+    # get the locations of the pixels for which the maximum probability is the correct class
+    correct_preds = torch.argmax(valid_probs, dim=-1) == valid_labels
+
+    # compute the L2 norms and their inverse for the embeddings
+    norms = torch.linalg.vector_norm(valid_embs, dim=-1)
+    inverse_norms = 1.0 / norms[correct_preds]
+
+    # correctly predicted pixels get punished for small norms and incorrect pixels get punished for large norms
+    return ( inverse_norms.mean() + norms[~correct_preds].mean() ) / 2.0
+
+
 
 def CCE(
     cprobs: torch.Tensor,
     labels: torch.Tensor,
     tree: Tree,
-    weights: torch.Tensor = None
+    weights: torch.Tensor = None,
+    embeddings: torch.Tensor = None,
+    valid_mask: torch.Tensor = None,
     ) -> torch.Tensor:
     """ 
     Compute the hierarchical cross-entropy loss as the -mean(correct(log prob)).
@@ -185,5 +213,11 @@ def CCE(
     if isinstance(weights, torch.Tensor):
         weighted_pos_logp = pos_logp * weights
         return -weighted_pos_logp.mean()
+    
+    if isinstance(embeddings, torch.Tensor):
+        return -pos_logp.mean() + compute_norm_term(embeddings,
+                                                    cprobs,
+                                                    valid_mask,
+                                                    labels)
     
     return -pos_logp.mean()

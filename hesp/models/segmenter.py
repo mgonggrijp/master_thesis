@@ -13,6 +13,8 @@ from hesp.util.norm_registry import NormRegistry
 # from hesp.util.data_helpers import imshow
 
 ROOT = '/home/mgonggri/master_thesis/'
+NORM_TERM = True
+
 
 class Segmenter(torch.nn.Module):
     def __init__(
@@ -145,12 +147,12 @@ class Segmenter(torch.nn.Module):
         normalized_embs = self.scale_and_shift(embs)
         
         # perform multinomial logistic regression in the embedding space to compute the probs;
-        proj_embs, self.cprobs = self.embedding_space(normalized_embs)
+        self.proj_embs, self.cprobs = self.embedding_space(normalized_embs)
         
         # compute the norm weights 
         if self.config.segmenter._WEIGHTS != 'none':
             
-            weight_args = {"embeddings"    : proj_embs,
+            weight_args = {"embeddings"    : self.proj_embs,
                            "valid_mask"    : self.valid_mask,
                            "valid_labels"  : self.valid_labels,
                            "method"        : self.config.segmenter._WEIGHTS}
@@ -163,7 +165,7 @@ class Segmenter(torch.nn.Module):
             self.norm_registry.update(
                 self.valid_mask,
                 self.valid_labels,
-                proj_embs,
+                self.proj_embs,
                 self.batch_indices)
             
             if self.global_steps % self.config.segmenter._COLLECT_EVERY == 0:
@@ -172,6 +174,7 @@ class Segmenter(torch.nn.Module):
                     f'[mean norms per class]\n{norm_avgs_per_class}'
                 )
                 self.norm_storage.append(norm_avgs_per_class[None, :])
+            
             
     def end_of_epoch(self):
         
@@ -207,7 +210,6 @@ class Segmenter(torch.nn.Module):
         if self.norm_storage: 
             stored_norms = torch.cat(self.norm_storage, dim=0)
             torch.save(stored_norms, f'{folder}norms.pt')
-            
 
         
     def update_model(self):
@@ -215,10 +217,18 @@ class Segmenter(torch.nn.Module):
         
         valid_cprobs = self.cprobs.moveaxis(1, -1)[self.valid_mask]
         
-        # import pdb
-        # pdb.set_trace()
+        embs, mask = None, None
+        if NORM_TERM:
+            embs = self.proj_embs
+            mask = self.valid_mask
         
-        hce_loss = loss.CCE(valid_cprobs, self.valid_labels, self.tree, self.weights)
+        hce_loss = loss.CCE(
+            valid_cprobs,
+            self.valid_labels,
+            self.tree,
+            self.weights,
+            embs,
+            mask)
         
         self.running_loss += hce_loss.item()
         
@@ -280,7 +290,7 @@ class Segmenter(torch.nn.Module):
             print('Training done. Saving final model state..')
     
             
-    def save_states(self):
+    def save_states(self) -> None:
         save_folder = self.config.segmenter._SAVE_FOLDER
         
         if not os.path.exists(save_folder):
@@ -295,7 +305,7 @@ class Segmenter(torch.nn.Module):
             f.write("{}\n{}".format(str(self.edx + 1), str(self.global_steps)))
 
             
-    def collate_fn(self):
+    def collate_fn(self) -> None:
         """
         Given a dataset and a list of indices return a batch of samples.
         Returns a tuple of (batch_samples, batch_labels)
@@ -310,16 +320,19 @@ class Segmenter(torch.nn.Module):
             
         self.images = torch.cat(image_batch).to(self.device)
         self.labels = torch.cat(label_batch).to(self.device).squeeze()
+        self.valid_mask = self.labels <= self.tree.M - 1
+        self.valid_labels = self.labels[self.valid_mask]
         
         
     def init_training_states(
         self,
-        train,
-        val_loader,
-        optimizer,
-        scheduler,
-        ):
-        """ Initialize all the variables into self which are used for training. """
+        train: torch.utils.data.Dataset  | torch.utils.data.DataLoader,
+        val_loader : torch.utils.data.DataLoader,
+        optimizer : torch.optim.Optimizer,
+        scheduler : torch.optim.lr_scheduler,
+        ) -> None:
+        
+        """ Initialize all the variables into self which are used for training given the configuration and setting. """
         EPS = 1e-6
         
         if self.config.segmenter._TRAIN_STOCHASTIC:
@@ -370,7 +383,7 @@ class Segmenter(torch.nn.Module):
             self.start_edx = 0 
     
     
-    def compute_sample_probs(self):
+    def compute_sample_probs(self) -> None:
         """
         Compute the probabilities of the samples by the inverse of their average norms
         such that larger norms make a sample less likely.
@@ -378,38 +391,58 @@ class Segmenter(torch.nn.Module):
         # compute the average norm per sample from the registry
         mean_sample_norms = self.norm_registry.average_per_sample()
         
-        # compute the sample probs from the inverse sample norms; larger norms --> smaller probability
+        print(f"[sample norm range]: \
+              \nmax  {mean_sample_norms.max().item()} \
+              \nmean {mean_sample_norms.mean().item()} \
+              \nmin  {mean_sample_norms.min().item()}")
+        
+        # replace zero norms by the average; can happen in case samples are unobserved / fully masked by ignore;
+        mean_sample_norms[mean_sample_norms == 0.0] = mean_sample_norms.mean()
+        
+        # update the sample probabilities s.t. lower norms -> more likely to draw
         self.sample_probs = torch.softmax(1.0 / mean_sample_norms, dim=0)
+        print(f"[sample probability range]: \
+              max {self.sample_probs.max().item()}, \
+              mean {self.sample_probs.mean().item()}, \
+              min {self.sample_probs.min().item()}")
+        
     
-    
-    def train_fn_stochastic(self, train_dataset, val_loader, optimizer, scheduler):
+    def train_fn_stochastic(
+        self,
+        train_dataset: torch.utils.data.Dataset,
+        val_loader: torch.utils.data.DataLoader,
+        optimizer: torch.optim.Optimizer,
+        scheduler: torch.optim.lr_scheduler,
+        **kwargs,
+        ) -> None:
+        
+        self.acc_storage = []
+        self.miou_storage = []
+        self.norm_storage = []
+            
         """ Probabilistic training loop that draws sample indices from a multinomial distribtution. """
         self.init_training_states(train_dataset, val_loader, optimizer, scheduler)
         torch.set_printoptions(sci_mode=False)
         
         # used for computing the sample probabilities
         
+        #  for first epoch make sure each sample is seen at least once s.t. they all get norms; 
+        indices = torch.multinomial(self.sample_probs, self.num_samples, replacement=False)
+        
         for edx in range(self.start_edx, self.config.segmenter._NUM_EPOCHS, 1):
             self.edx = edx
-            
-            # draw a number of random samples equal to the training data size; may contain more than one of the same
-            indices = torch.multinomial(self.sample_probs, self.num_samples, replacement=True)
 
             # go through the random indices in batches                
-            for i in range(0, self.num_samples, self.batch_size):
-                bottom, upper = i, i + self.batch_size
-                
-                # drop last batch if it becomes smaller than 2 samples; messes up the convolutions idk why
-                if self.num_samples - i < 2:
+            for bottom_idx in range(0, self.num_samples, self.batch_size):
+                # drop last batch if it's not a full batch
+                if  self.num_samples - 1 - bottom_idx < self.batch_size:
                     break
                 
-                self.batch_indices = indices[bottom : upper]
+                self.batch_indices = indices[bottom_idx : bottom_idx + self.batch_size]
+                
                 
                 # make the batch of images and labels using the indices;
                 self.collate_fn()
-                
-                # for masking out ignored pixels
-                self.valid_mask = self.labels <= self.tree.M - 1
                 
                 # compute the class probabilities for each pixel;
                 self.forward()
@@ -423,19 +456,12 @@ class Segmenter(torch.nn.Module):
 
                 self.scheduler.step()
                 
-            # reset steps, increment epoch, take a scheduler step and 
+            # reset steps; increment epoch; compute once-per-epoch functions and updates;
             self.end_of_epoch()
             
-            proj_mean = self.mean_projection_norms.mean()
-            proj_max = self.mean_projection_norms.amax()
-            proj_min = self.mean_projection_norms.amax()
+            # draw samples for next epoch, duplicates are allowed 
+            indices = torch.multinomial(self.sample_probs, self.num_samples, replacement=True)
             
-            prob_mean = self.sample_probs.mean()
-            prob_max = self.sample_probs.amax()
-            prob_min = self.sample_probs.amin()
-            
-            print('projections:', proj_mean, proj_max, proj_min)
-            print('probabilities:', prob_mean, prob_max, prob_min)
             
         print('Training done. Saving final model state..')
         self.save_states()

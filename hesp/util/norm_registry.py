@@ -106,7 +106,7 @@ class NormRegistry:
         if not self.averaged:
             self.average()
             
-        # for each class compute the average over the samples; keep into account unseen mean registry values which are zero       
+        # for each class compute the average over the samples; 
         with torch.no_grad():        
             return torch.nan_to_num(self.mean_registry.sum(dim=0) / (self.mean_registry > 0).sum(dim=0))
         
@@ -117,7 +117,7 @@ class NormRegistry:
         if not self.averaged:
             self.average()
 
-        # for each sample compute the average over the classes; keep into account unseen mean registry values which are zero        
+        # for each sample compute the average over the classes;      
         with torch.no_grad():
             return torch.nan_to_num(self.mean_registry.sum(dim=1) / (self.mean_registry > 0).sum(dim=1))
             
