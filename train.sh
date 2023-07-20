@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=18
 #SBATCH --partition=gpu
 #SBATCH --time=15:00:00
-#SBATCH --job-name=cw_s_1
+#SBATCH --job-name=enc_3
  
 module purge
 module load 2022
@@ -17,13 +17,13 @@ cd /scratch-shared/$USER
 
 srun python -u $HOME/master_thesis/train.py \
   --slr 0.0001 \
-  --c 0.2 \
+  --c 0.0025 \
   --train_metrics \
-  --seed 1.0 \
+  --seed 3.0 \
   --num_epochs 60 \
-  --id _clsw_sq_1 \
+  --id _encourage_3 \
   --save_state \
-  --weights class_based \
-  > out_clsw_sq_1.txt
+  --uncertainty encourage \
+  > out_encourage_3.txt
 
-cp -r  out_clsw_sq_1.txt $HOME/master_thesis/output_files
+cp -r  out_encourage_3.txt $HOME/master_thesis/output_files

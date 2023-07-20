@@ -64,7 +64,7 @@ def train():
         config.segmenter._REGISTER_NORMS = args.register_norms
         
         config.segmenter._COLLECT_EVERY = args.collect_every
-        config.segmenter._WEIGHTS = args.weights
+        config.segmenter._UNCERTAINTY = args.uncertainty
         
         if not args.num_epochs:
             config.segmenter._NUM_EPOCHS = config.dataset._NUM_EPOCHS

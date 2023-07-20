@@ -2,159 +2,120 @@ import torch
 from hesp.hierarchy.tree import Tree
 
 
-def compute_uncertainty_weights(embeddings: torch.Tensor, valid_mask: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
+def compute_uncertainty(
+    embeddings: torch.Tensor,
+    valid_mask: torch.Tensor
+    ) -> torch.Tensor:
     """ 
-    Given a set of embeddings of shape (batch, dim, height, width) 
-    and a valid value mask of shape (batch, heigth width) compute the 
-    uncertainty weights for each pixel embedding as 
-                        uw = 1.0 / log(t + d)
-    Where d is the set of hyperbolic distances of each pixel embedding 
-    normalized by the maximum of these distance for the same image.
+    Compute the inverse L2 norm for a collection of valid pixel embeddings normalized
+    by the maximum norm for the same image.
     """
-    with torch.no_grad():
-        # mask out the embeddings corresponding to ignore labels
-        masked_embs = embeddings.moveaxis(1, -1)[valid_mask]
-        
-        # figure out how many elements get masked out per sample
-        slices = valid_mask.sum(dim=(1,2))
-        
-        # each remaining pixel embedding gets one weight value
-        weights = torch.ones(masked_embs.size(0), device=embeddings.device)
-        
-        sqrt_c = torch.sqrt(c)
-        
-        start = 0
-        # go through samples
-        for s in slices:
-            # set slice end range
-            end = start  + s
-            
-            if end != start:
-                # take a slice of the masked embeddings for one sample and compute the hyperbolic distance to zero
-                norms = torch.linalg.vector_norm(masked_embs[start : end], dim=-1)
-                
-                dist_c_zeros = 2.0 / sqrt_c * torch.arctanh(sqrt_c * norms)
-                
-                # for each sample, compute it's maximum distance
-                sample_max = torch.amax(dist_c_zeros, dim=0)
-                
-                # then normalize the sample distances by the max
-                max_normalized = dist_c_zeros / sample_max
-                
-                # compute the weights for this sample
-                weights[start : end] = 1.0 / torch.log(1.02 + max_normalized) + 1.0
-            
-            # move to next slice
-            start = end
-            
-    return weights
-
-
-def compute_uweights_simple(embeddings, valid_mask):
     
-    with torch.no_grad():
-        # mask out the embeddings corresponding to ignore labels
-        masked_embs = embeddings.moveaxis(1, -1)[valid_mask]
+    # compute the slices that correspond to samples after masking
+    slices = valid_mask.sum(dim=(1,2))
+    
+    # mask the invalid pixels and compute the norms of their embeddings
+    valid_norms = torch.linalg.vector_norm(embeddings.moveaxis(1, -1)[valid_mask], dim=-1)
+
+    # each pixel gets one weight value    
+    weights = torch.ones_like(valid_norms)
+    
+    lower = 0
+    
+    for s in slices:
+        upper = lower + s 
+
+        if upper != lower:
+            # get the slice of norms corresponding to the current sample        
+            sample_norms = valid_norms[lower : upper]
+            
+            # compute the maximum norm for this sample
+            max_sample_norm = sample_norms.amax(dim=0)
+            
+            # normalize by the maximum and take it's inverse; smaller norms --> larger weight
+            weights[lower : upper] = max_sample_norm / sample_norms
         
-        # figure out how many elements get masked out per sample
-        slices = valid_mask.sum(dim=(1,2))
-        
-        # each remaining pixel embedding gets one weight value
-        weights = torch.ones(masked_embs.size(0), device=embeddings.device)
-        
-        start = 0
-        # go through samples
-        for s in slices:
-            # set slice end range
-            end = start  + s
-            
-            # compute L2 norms for a sample
-            norms = torch.linalg.norm(masked_embs[start : end], dim=-1)
-            
-            # weights are inverse of the L2 norms
-            weights[start : end] = 1.0 / norms
-            
-            # move to next slice
-            start = end
-            
+        lower = upper
+    
     return weights    
 
 
-def compute_class_norm_weights(
+def compute_class_uncertainty(
     embeddings: torch.Tensor,
     valid_mask: torch.Tensor,
     valid_labels: torch.Tensor,
-    method: str = 'invert'
     ):
     
     """ Compute the pixel weights based on the norms within each class and sample. """
     
-    with torch.no_grad():
-        # slices that correspond to samples after masking
-        sample_slices = valid_mask.sum(dim=(1,2))
-        
-        # compute the L2 norms of the norms corresponding to valid pixels
-        valid_norms = torch.linalg.vector_norm( embeddings.moveaxis(1, -1)[valid_mask], dim=-1 )
-        
-        # each pixel after applying the valid mask gets one weight
-        weights = torch.zeros_like(valid_norms)
-        
-        # go through the slices that correspond to samples after masking 
-        start = 0
-        for s in sample_slices:
+    # slices that correspond to samples after masking
+    sample_slices = valid_mask.sum(dim=(1,2))
+    
+    # compute the L2 norms of the norms corresponding to valid pixels
+    valid_norms = torch.linalg.vector_norm( embeddings.moveaxis(1, -1)[valid_mask], dim=-1 )
+    
+    # each pixel after applying the valid mask gets one weight
+    weights = torch.zeros_like(valid_norms)
+    
+    # go through the slices that correspond to samples after masking 
+    start = 0
+    for s in sample_slices:
 
-            end = start + s
+        end = start + s
 
-            # avoid making empty slices, rare case if all labels are 'ignore' 
-            if end == start:
-                start = end
-                continue
-
-            # get the norms and labels corresponding to the current sample 
-            sample_norms = valid_norms[start : end]
-            sample_labels = valid_labels[start : end]
-
-            # get the set of classes present in the current sample slice
-            class_set = torch.unique(sample_labels)
-
-            for c in class_set:
-                # find the locations of the current class in the current sample
-                class_locations = sample_labels == c
-                
-                # compute the norms per class for current sample
-                class_norms = sample_norms[class_locations]
-            
-                # find the maximum norm for the (sample, class)
-                max_class_norm = torch.amax(class_norms, dim=0)
-
-                # compute and store the weights based on these norms with the selected scheme
-                if method == 'invert':
-                    weights[start : end][class_locations] = (class_norms / max_class_norm)**-2
-
-            # move to next sample slice
+        # avoid making empty slices, rare case if all labels are 'ignore' 
+        if end == start:
             start = end
+            continue
+
+        # get the norms and labels corresponding to the current sample 
+        sample_norms = valid_norms[start : end]
+        sample_labels = valid_labels[start : end]
+
+        # get the set of classes present in the current sample slice
+        class_set = torch.unique(sample_labels)
+
+        for c in class_set:
+            # find the locations of the current class in the current sample
+            class_locations = sample_labels == c
+            
+            # retrieve the norms per class for current sample
+            class_norms = sample_norms[class_locations]
+        
+            # find the maximum norm for the (sample, class)
+            max_class_norm = torch.amax(class_norms, dim=0)
+
+            # normalize by the maximum and take it's inverse; smaller norms --> larger weight
+            weights[start : end][class_locations] = max_class_norm / class_norms
+
+        # move to next sample slice
+        start = end
 
     return weights
 
 
-def compute_weights(**weight_args):
+def compute_uncertainty_loss_augmentation(**weight_args):
     
     method = weight_args['method']
     embeddings = weight_args['embeddings']
     valid_mask = weight_args['valid_mask']
     valid_labels = weight_args['valid_labels']
+    cprobs = weight_args['cond_probs']
     
-    if method == 'uncertainty':
-        return compute_uncertainty_weights(embeddings, valid_mask)
+    if method == 'basic_weights':
+        return compute_uncertainty(embeddings, valid_mask)
     
-    elif method == 'class_based':
-        return compute_class_norm_weights(embeddings, valid_mask, valid_labels)
+    elif method == 'class_weights':
+        return compute_class_uncertainty(embeddings, valid_mask, valid_labels)
     
+    elif method == 'encourage':
+        return compute_encouragement_loss(embeddings, cprobs, valid_labels, valid_mask)    
+
     else:
         raise NotImplementedError()
     
     
-def compute_norm_term(
+def compute_encouragement_loss(
     embs: torch.Tensor,
     probs: torch.Tensor,
     valid_labels: torch.Tensor,
@@ -181,14 +142,11 @@ def compute_norm_term(
     return ( inverse_norms.mean() + norms[~correct_preds].mean() ) / 2.0
 
 
-
 def CCE(
     cprobs: torch.Tensor,
     labels: torch.Tensor,
     tree: Tree,
-    weights: torch.Tensor = None,
-    embeddings: torch.Tensor = None,
-    valid_mask: torch.Tensor = None,
+    **kwargs,
     ) -> torch.Tensor:
     """ 
     Compute the hierarchical cross-entropy loss as the -mean(correct(log prob)).
@@ -208,16 +166,21 @@ def CCE(
     
     # collect the probabilities that correspond to the labels
     pos_logp = torch.gather(log_sum_p, 1, labels[:, None]).squeeze()
+    
+    # check kwargs for uncertainty tensors used for loss augmentation
+    kwarg_keys = kwargs.keys()
+    
+    # weight loss with class based uncertainty weights
+    if 'class_weights' in kwarg_keys:
+        return -(pos_logp * kwargs['class_weights']).mean()
 
-    # reweight the loss with uncertainty values if provided
-    if isinstance(weights, torch.Tensor):
-        weighted_pos_logp = pos_logp * weights
-        return -weighted_pos_logp.mean()
+    # weight loss with basic uncertainty weights        
+    elif 'basic_weights' in kwarg_keys:
+        return -(pos_logp * kwargs['basic_weights']).mean()
     
-    if isinstance(embeddings, torch.Tensor):
-        return -pos_logp.mean() + compute_norm_term(embeddings,
-                                                    cprobs,
-                                                    valid_mask,
-                                                    labels)
-    
+    # add the uncertainty based encouragement term to the loss
+    elif 'encourage' in kwarg_keys:
+        return -pos_logp.mean() + kwargs['encourage']
+        
+    # return default loss    
     return -pos_logp.mean()

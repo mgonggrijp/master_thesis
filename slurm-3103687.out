@@ -1,0 +1,31 @@
+Traceback (most recent call last):
+  File "/home/mgonggri/master_thesis/train.py", line 180, in <module>
+    train()
+  File "/home/mgonggri/master_thesis/train.py", line 175, in train
+    model.train_fn(
+  File "/gpfs/home1/mgonggri/master_thesis/hesp/models/segmenter.py", line 202, in train_fn
+    self.forward()
+  File "/gpfs/home1/mgonggri/master_thesis/hesp/models/segmenter.py", line 100, in forward
+    uncertainty = loss.compute_uncertainty_loss_augmentation(**weight_args)
+  File "/gpfs/home1/mgonggri/master_thesis/hesp/util/loss.py", line 106, in compute_uncertainty_loss_augmentation
+    return compute_uncertainty(embeddings, valid_mask)
+  File "/gpfs/home1/mgonggri/master_thesis/hesp/util/loss.py", line 36, in compute_uncertainty
+    weights[lower : upper] = max_sample_norm / sample_norms
+TypeError: unsupported operand type(s) for /: 'torch.return_types.max' and 'Tensor'
+srun: error: gcn59: task 0: Exited with exit code 1
+srun: Terminating StepId=3103687.0
+
+JOB STATISTICS
+==============
+Job ID: 3103687
+Cluster: snellius
+User/Group: mgonggri/mgonggri
+State: RUNNING
+Nodes: 1
+Cores per node: 18
+CPU Utilized: 00:00:00
+CPU Efficiency: 0.00% of 00:30:18 core-walltime
+Job Wall-clock time: 00:01:41
+Memory Utilized: 0.00 MB (estimated maximum)
+Memory Efficiency: 0.00% of 120.00 GB (120.00 GB/node)
+WARNING: Efficiency statistics may be misleading for RUNNING jobs.

@@ -1,0 +1,17 @@
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
+slurmstepd: error: *** JOB 3102842 ON gcn4 CANCELLED AT 2023-07-20T16:31:23 ***
+slurmstepd: error: *** STEP 3102842.0 ON gcn4 CANCELLED AT 2023-07-20T16:31:23 ***
+
+JOB STATISTICS
+==============
+Job ID: 3102842
+Cluster: snellius
+User/Group: mgonggri/mgonggri
+State: CANCELLED (exit code 0)
+Nodes: 1
+Cores per node: 18
+CPU Utilized: 01:48:47
+CPU Efficiency: 8.32% of 21:47:42 core-walltime
+Job Wall-clock time: 01:12:39
+Memory Utilized: 48.88 GB
+Memory Efficiency: 40.73% of 120.00 GB
