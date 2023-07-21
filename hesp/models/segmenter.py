@@ -9,11 +9,10 @@ import torchmetrics
 import random
 import os
 import torch
-from hesp.util.norm_registry import NormRegistry
+from hesp.util.norm_sampler import NormSampler
 # from hesp.util.data_helpers import imshow
 
 ROOT = '/home/mgonggri/master_thesis/'
-
 
 class Segmenter(torch.nn.Module):
     def __init__(
@@ -315,20 +314,6 @@ class Segmenter(torch.nn.Module):
         else:
             self.start_edx = 0 
     
-    
-    def compute_sample_probs(self) -> None:
-        """
-        Compute the probabilities of the samples by the inverse of their average norms
-        such that larger norms make a sample less likely.
-        """
-        # compute the average norm per sample from the registry
-        mean_sample_norms = self.norm_registry.average_per_sample()
-        
-        # replace zero norms by the average; can happen in case samples are unobserved / fully masked by ignore;
-        mean_sample_norms[mean_sample_norms == 0.0] = mean_sample_norms.mean()
-        
-        # update the sample probabilities such that lower norms are more likely to draw
-        self.sample_probs = torch.softmax(1.0 / mean_sample_norms, dim=0)
     
     def train_fn_stochastic(
         self,
