@@ -1,0 +1,17 @@
+slurmstepd: error: *** STEP 3119052.0 ON gcn27 CANCELLED AT 2023-07-21T21:15:47 ***
+slurmstepd: error: *** JOB 3119052 ON gcn27 CANCELLED AT 2023-07-21T21:15:47 ***
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
+
+JOB STATISTICS
+==============
+Job ID: 3119052
+Cluster: snellius
+User/Group: mgonggri/mgonggri
+State: CANCELLED (exit code 0)
+Nodes: 1
+Cores per node: 18
+CPU Utilized: 00:53:14
+CPU Efficiency: 19.48% of 04:33:18 core-walltime
+Job Wall-clock time: 00:15:11
+Memory Utilized: 48.83 GB
+Memory Efficiency: 40.69% of 120.00 GB

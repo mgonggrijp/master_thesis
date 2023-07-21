@@ -101,33 +101,32 @@ class Segmenter(torch.nn.Module):
             # store the uncertainty in kwargs for the loss.
             self.uncertainty_args = {self.config.segmenter._UNCERTAINTY : uncertainty}
             
-        # update the norm registry
-        if self.config.segmenter._REGISTER_NORMS:
-            self.norm_registry.update(
-                self.valid_mask,
-                self.valid_labels,
-                self.proj_embs,
-                self.batch_indices)
-            
-            if self.global_steps % self.config.segmenter._COLLECT_EVERY == 0:
-                norm_avgs_per_class = self.norm_registry.average_per_class()
-                print(f'[mean norms per class]\n{norm_avgs_per_class}')
-                self.norm_storage.append(norm_avgs_per_class[None, :])
-                
-        # update the sample probabilities with the norm registry
         if self.config.segmenter._TRAIN_STOCHASTIC:
-            self.compute_sample_probs()
-            
+            # update the norm sampler with the new embedding norms
+            self.norm_sampler.update_norms(self.proj_embs, self.valid_labels, self.valid_mask, self.batch_indices)
+            # update the sample probs with the new norms
+            self.norm_sampler.compute_sample_probs()
             
     def end_of_epoch(self):
+        if self.config.segmenter._TRAIN_STOCHASTIC:
+            # print the statistics of the sample probabilities
+            print(
+                '[min sample prob]',  self.norm_sampler.sample_probs.min().item(),   '\n'
+                '[mean sample prob]', self.norm_sampler.sample_probs.mean().item(),  '\n'
+                '[max sample prob]',  self.norm_sampler.sample_probs.max().item(),   '\n\n'
+            )
+            
+            # print the statistics of the sample and class norms
+            mean_sample_norms = self.norm_sampler.compute_mean_sample_norms()
+            mean_class_norms = self.norm_sampler.compute_mean_class_norms()
+            print('[mean sample norm min]', mean_sample_norms.min().item())
+            print('[mean sample norm mean]', mean_sample_norms.mean().item())
+            print('[mean sample norm max]', mean_sample_norms.max().item())
+            print('[mean class norms] ', mean_class_norms.tolist(), '\n\n')
         
         self.embedding_space.running_norms = 0.0
         self.steps = 0
         self.running_loss = 0.0
-        
-        if self.config.segmenter._REGISTER_NORMS:    
-            print( f"[average norms per class]\n \
-                  {self.norm_registry.average_per_class()}")
         
         if self.train_metrics:
             self.compute_metrics('train')
@@ -180,10 +179,6 @@ class Segmenter(torch.nn.Module):
      
     def train_fn(self, train_loader, val_loader, optimizer, scheduler):
         self.init_training_states(train_loader, val_loader, optimizer, scheduler)
-        
-        self.acc_storage = []
-        self.miou_storage = []
-        self.norm_storage = []
 
         for edx in range(self.start_edx, self.config.segmenter._NUM_EPOCHS + self.start_edx, 1):
             self.edx = edx
@@ -264,6 +259,10 @@ class Segmenter(torch.nn.Module):
         scheduler : torch.optim.lr_scheduler,
         ) -> None:
         
+        self.acc_storage = []
+        self.miou_storage = []
+        self.norm_storage = []
+        
         """ Initialize all the variables into self which are used for training given the configuration and setting. """
         EPS = 1e-6
         
@@ -281,12 +280,12 @@ class Segmenter(torch.nn.Module):
             
             # projected embeddings are used to compute the sample probabilities
             self.embedding_space.return_projections = True
-
+            
+            # initialize the norm sampler that stores the embedding norms and computes the sample probabilities
+            self.norm_sampler = NormSampler(self.num_samples, self.config.dataset._NUM_CLASSES, device=self.device)
+            
         else:
             self.num_samples = len(train.dataset)
-            
-        if self.config.segmenter._REGISTER_NORMS:
-            self.norm_registry = NormRegistry(self.num_samples, self.config.dataset._NUM_CLASSES)
             
         self.val_loader = val_loader
         self.scheduler = scheduler
@@ -323,14 +322,13 @@ class Segmenter(torch.nn.Module):
         scheduler: torch.optim.lr_scheduler,
         ) -> None:
         
-        self.acc_storage = []
-        self.miou_storage = []
-        self.norm_storage = []
-            
-        """ Probabilistic training loop that draws sample indices from a multinomial distribtution. """
+        """
+        Probabilistic training loop that draws sample indices from a multinomial
+        distribtution based on the inverse mean L2 norms of embeddings.
+        """
+        
         self.init_training_states(train_dataset, val_loader, optimizer, scheduler)
         torch.set_printoptions(sci_mode=False)
-        
         
         for edx in range(self.start_edx, self.config.segmenter._NUM_EPOCHS, 1):
             self.edx = edx
@@ -339,7 +337,7 @@ class Segmenter(torch.nn.Module):
             for _ in range(0, self.num_samples, self.batch_size):
                 
                 # draw a batch of sample indeces from the distribution
-                self.batch_indices = torch.multinomial(self.sample_probs, self.batch_size, replacement=False)
+                self.batch_indices = torch.multinomial(self.norm_sampler.sample_probs, self.batch_size, replacement=False)
                 
                 # make the batch of images and labels using the indices
                 self.collate_fn()

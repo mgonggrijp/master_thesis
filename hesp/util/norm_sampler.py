@@ -16,6 +16,7 @@ class NormSampler:
         self.norms = torch.zeros(num_samples, num_classes, device=device)
         self.sample_probs = torch.ones(num_samples, ) / num_samples
         
+        
     def update_norms(
         self,
         embeddings,
@@ -35,7 +36,7 @@ class NormSampler:
                 if top == bottom:
                     continue
                     
-                sample_index = indices[i]
+                sample_index = batch_indices[i]
                 sample_labels = valid_labels[bottom : top]
                 sample_classes = torch.unique(sample_labels)
                 
@@ -45,7 +46,34 @@ class NormSampler:
                 
                 bottom = top
                 
+        return None
+            
+                
+    def compute_mean_sample_norms(self):
+        """ 
+        Compute the mean norms for every sample over all classes.
+        Zeros due to not yet seen are interpolated with the mean.
+        """
+        means = torch.nan_to_num(self.norms.sum(dim=1) / (self.norms > 0.0).sum(dim=1))
+        means[means == 0.0] = means[means != 0.0].mean()
+        return means
+    
+
+    def compute_mean_class_norms(self):
+        """ 
+        Compute the mean norms for every class over all samples.
+        Zeros due to not yet seen are interpolated with the mean.
+        """
+        means = torch.nan_to_num(self.norms.sum(dim=0) / (self.norms > 0.0).sum(dim=0))
+        means[means == 0.0] = means[means != 0.0].mean()
+        return means
+    
+                
     def compute_sample_probs(self):
-        mean_sample_norms = self.norms.mean(dim=1)
-        mean_sample_norms[mean_sample_norms == 0.0] = mean_sample_norms[mean_sample_norms != 0.0].mean()
-        self.sample_probs = torch.softmax(1.0 / mean_sample_norms, dim=0)
+        """
+        Compute the sample probabilities as a softmax over the inverse of their mean embedding norms.
+        Unseen samples get their norms interpolated by the mean of all others.
+        """
+        mean_norms = self.compute_mean_sample_norms()
+        self.sample_probs = torch.softmax(1.0 / torch.log(mean_norms), dim=0)
+        return None

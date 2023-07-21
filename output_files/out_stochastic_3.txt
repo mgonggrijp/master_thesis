@@ -1,0 +1,272 @@
+[number of training samples]    80
+[number of validation samples]  20
+[Training with cyclic learning rate scheduling...]
+mode : segmenter
+uncertainty : none
+collect_every : 200
+register_norms : False
+save_state : True
+train_metrics : True
+train_stochastic : True
+data_limit : 100
+warmup_epochs : 0
+val_metrics : True
+base_model : deeplabv3plus
+resume : False
+dataset : pascal
+geometry : hyperbolic
+dim : 256
+c : 0.0025
+seed : 3.0
+flat : False
+freeze_bb : False
+freeze_bn : False
+batch_size : 5
+num_epochs : 2
+device : cuda:0
+slr : 0.0001
+backbone : resnet101
+output_stride : 16
+base_save_dir : saves
+segmenter_dir : segmenter_experiments
+train : False
+val : False
+id : _stochastic_3
+json_name : 
+pre_trained_bb : True
+precision : 32
+
+[Training with stochastic batching...]
+Initializing stochastic training setup...
+[random seed]   3.0
+[min sample prob] 2.7631740522338077e-05 
+[mean sample prob] 0.012500002048909664 
+[max sample prob] 0.20814098417758942 
+
+
+[mean sample norm min] 0.6252666711807251
+[mean sample norm mean] 1.6083869934082031
+[mean sample norm max] 3.6183950901031494
+[mean class norms]  [7.072184085845947, 1.1082791090011597, 0.5429708361625671, 1.0036872625350952, 0.3633975684642792, 0.5758897662162781, 0.16215279698371887, 0.6948029398918152, 0.8155037760734558, 0.5562235116958618, 1.1082791090011597, 0.7251784205436707, 0.21164491772651672, 0.748676598072052, 1.1082791090011597, 2.8189427852630615, 0.18004313111305237, 1.1082791090011597, 0.19522351026535034, 1.0659445524215698, 1.1082791090011597] 
+
+
+-----------------[train metrics epoch 0]-----------------
+
+[accuracy per class]
+unlabeled        0.6612367033958435
+airplane         0.0
+bicycle          0.07276307046413422
+bird             0.02600177749991417
+boat             0.027249334380030632
+bottle           0.02237001247704029
+bus              0.08527828752994537
+car              0.11621556431055069
+cat              0.26527294516563416
+chair            0.0034716841764748096
+cow              0.0
+dining_table     0.005858125165104866
+dog              0.000936301308684051
+horse            0.14881691336631775
+motorcycle       0.0
+person           0.1624438464641571
+pot_plant        8.052858902374282e-06
+sheep            0.0
+couch            0.0
+locomotive       0.05732881650328636
+television       0.0
+
+[miou per class]
+unlabeled        0.4801742434501648
+airplane         0.0
+bicycle          0.023765940219163895
+bird             0.010690740309655666
+boat             0.01410567294806242
+bottle           0.0014306888915598392
+bus              0.07318459451198578
+car              0.09601867198944092
+cat              0.18388321995735168
+chair            0.001267527579329908
+cow              0.0
+dining_table     0.004938909318298101
+dog              0.00032312871189787984
+horse            0.10754410922527313
+motorcycle       0.0
+person           0.0850706622004509
+pot_plant        7.179085969255539e-06
+sheep            0.0
+couch            0.0
+locomotive       0.020998843014240265
+television       0.0
+[train miou]     0.05254306271672249
+[train accuracy] 0.07882148772478104
+-----------------[end train metrics epoch 0]-----------------
+
+
+-----------------[val metrics epoch 0]-----------------
+
+[accuracy per class]
+unlabeled        0.7858768701553345
+airplane         0.0004937052726745605
+bicycle          0.08856257051229477
+bird             0.003740611020475626
+boat             0.0
+bottle           0.0
+bus              0.0
+car              0.37475380301475525
+cat              0.4876774549484253
+chair            0.0
+cow              0.0
+dining_table     0.0
+dog              0.0007757635321468115
+horse            0.0
+motorcycle       0.020720692351460457
+person           0.1573522984981537
+pot_plant        0.0
+sheep            0.015961814671754837
+couch            0.0024918236304074526
+locomotive       0.0
+television       0.0
+
+[miou per class]
+unlabeled        0.6862602233886719
+airplane         0.00043744532740674913
+bicycle          0.052264995872974396
+bird             0.002246221760287881
+boat             0.0
+bottle           0.0
+bus              0.0
+car              0.017914529889822006
+cat              0.05289902910590172
+chair            0.0
+cow              0.0
+dining_table     0.0
+dog              0.0007242095889523625
+horse            0.0
+motorcycle       0.018871955573558807
+person           0.1413351595401764
+pot_plant        0.0
+sheep            0.012154609896242619
+couch            0.002313643228262663
+locomotive       0.0
+television       0.0
+[val miou]     0.04702009633183479
+[val accuracy] 0.09230512380599976
+-----------------[end val metrics epoch 0]-----------------
+
+
+[min sample prob] 2.2440973267200213e-16 
+[mean sample prob] 0.012500000186264515 
+[max sample prob] 1.0 
+
+
+[mean sample norm min] 0.6252666711807251
+[mean sample norm mean] 1.5506020784378052
+[mean sample norm max] 3.6183950901031494
+[mean class norms]  [8.171191215515137, 1.2210991382598877, 0.5429708361625671, 0.9941481947898865, 0.5066037178039551, 0.5758897662162781, 0.16215279698371887, 0.6747831702232361, 0.8189738392829895, 0.8668538928031921, 1.2210991382598877, 0.8620942234992981, 0.36739906668663025, 0.6472885012626648, 1.2210991382598877, 3.0956027507781982, 0.7778095602989197, 0.2784821689128876, 0.19522351026535034, 1.221218466758728, 1.2210991382598877] 
+
+
+-----------------[train metrics epoch 1]-----------------
+
+[accuracy per class]
+unlabeled        0.8307062387466431
+airplane         0.0
+bicycle          0.0
+bird             0.5469621419906616
+boat             0.04515460133552551
+bottle           0.0
+bus              0.0
+car              0.7710009813308716
+cat              0.4589681029319763
+chair            0.0
+cow              0.0
+dining_table     0.00878777913749218
+dog              0.0
+horse            0.4853031039237976
+motorcycle       0.0
+person           0.26021715998649597
+pot_plant        0.5254362225532532
+sheep            1.4363894479174633e-05
+couch            0.0
+locomotive       0.00010464500519447029
+television       0.0
+
+[miou per class]
+unlabeled        0.676773190498352
+airplane         0.0
+bicycle          0.0
+bird             0.45267337560653687
+boat             0.03375682979822159
+bottle           0.0
+bus              0.0
+car              0.45760491490364075
+cat              0.24919088184833527
+chair            0.0
+cow              0.0
+dining_table     0.0057957409881055355
+dog              0.0
+horse            0.3215797245502472
+motorcycle       0.0
+person           0.1861644983291626
+pot_plant        0.43952199816703796
+sheep            1.342101768386783e-05
+couch            0.0
+locomotive       7.248910696944222e-05
+television       0.0
+[train miou]     0.13443557918071747
+[train accuracy] 0.18726930022239685
+-----------------[end train metrics epoch 1]-----------------
+
+
+-----------------[val metrics epoch 1]-----------------
+
+[accuracy per class]
+unlabeled        0.7934220433235168
+airplane         0.0
+bicycle          0.004711748566478491
+bird             0.5831462740898132
+boat             0.0
+bottle           0.0
+bus              0.0
+car              0.3550569415092468
+cat              0.28053250908851624
+chair            0.0
+cow              0.0
+dining_table     0.0
+dog              0.00694104190915823
+horse            0.0
+motorcycle       0.003124900860711932
+person           0.46682339906692505
+pot_plant        0.0
+sheep            0.0
+couch            0.0
+locomotive       0.0
+television       0.0
+
+[miou per class]
+unlabeled        0.7040718197822571
+airplane         0.0
+bicycle          0.004574473947286606
+bird             0.13110904395580292
+boat             0.0
+bottle           0.0
+bus              0.0
+car              0.03746408224105835
+cat              0.06418436765670776
+chair            0.0
+cow              0.0
+dining_table     0.0
+dog              0.006890402175486088
+horse            0.0
+motorcycle       0.003115225350484252
+person           0.33050021529197693
+pot_plant        0.0
+sheep            0.0
+couch            0.0
+locomotive       0.0
+television       0.0
+[val miou]     0.06104331836104393
+[val accuracy] 0.1187504231929779
+-----------------[end val metrics epoch 1]-----------------
+
+
+Training done. Saving final model state..
