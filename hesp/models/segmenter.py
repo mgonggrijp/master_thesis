@@ -10,7 +10,6 @@ import random
 import os
 import torch
 from hesp.util.norm_sampler import NormSampler
-# from hesp.util.data_helpers import imshow
 
 ROOT = '/home/mgonggri/master_thesis/'
 
