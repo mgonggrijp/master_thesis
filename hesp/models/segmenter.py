@@ -106,6 +106,7 @@ class Segmenter(torch.nn.Module):
             # update the sample probs with the new norms
             self.norm_sampler.compute_sample_probs()
             
+            
     def end_of_epoch(self):
         if self.config.segmenter._TRAIN_STOCHASTIC:
             # print the statistics of the sample probabilities
