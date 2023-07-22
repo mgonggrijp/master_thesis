@@ -17,7 +17,7 @@ parser.add_argument(
 parser.add_argument(
     '--uncertainty',
     type=str,
-    choices=['class_weights', 'basic_weights', 'encourage', 'none'],
+    choices=['class_weights', 'basic_weights', 'none'],
     default = 'none'
 )
 

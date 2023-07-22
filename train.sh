@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=18
 #SBATCH --partition=gpu
 #SBATCH --time=15:00:00
-#SBATCH --job-name=stc_3
+#SBATCH --job-name=stc_2
  
 module purge
 module load 2022
@@ -19,11 +19,11 @@ srun python -u $HOME/master_thesis/train.py \
   --slr 0.0001 \
   --c 0.0025 \
   --train_metrics \
-  --seed 3.0 \
+  --seed 2.0 \
   --num_epochs 60 \
-  --id _stochastic_3 \
+  --id _stochastic_2 \
   --train_stochastic \
   --save_state \
-  > out_stochastic_3.txt
+  > out_stochastic_2.txt
 
-cp -r  out_stochastic_3.txt $HOME/master_thesis/output_files
+cp -r  out_stochastic_2.txt $HOME/master_thesis/output_files
